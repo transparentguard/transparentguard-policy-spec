@@ -106,6 +106,9 @@ export default function SubmitScreen() {
     <div className="min-h-[100dvh] w-full max-w-[600px] mx-auto px-[24px] py-12 flex flex-col justify-center">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full mt-12 mb-24">
 
+        {/* Logo */}
+        <div className="text-[15px] font-semibold tracking-tight">[tee]</div>
+
         {/* Upload + Speak row */}
         <div className="grid grid-cols-2 border border-border rounded-[4px] overflow-hidden" style={{ height: '96px' }}>
 
