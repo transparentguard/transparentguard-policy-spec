@@ -13,16 +13,19 @@ export default function SubmitScreen() {
     <div className="min-h-[100dvh] w-full max-w-[600px] mx-auto px-[24px] py-12 flex flex-col justify-center">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full mt-12 mb-24">
         
-        <div className="grid grid-cols-3 gap-0 border border-border rounded-[4px] overflow-hidden">
-          <div className="border-r border-border p-4 h-24 flex items-center justify-center cursor-pointer hover:bg-foreground/5 transition-colors group">
-            <span className="text-[14px] group-hover:opacity-100 opacity-70 text-center">upload //</span>
+        <div className="grid grid-cols-3 border border-border rounded-[4px] overflow-hidden" style={{height: '96px'}}>
+          <div className="border-r border-border flex items-center justify-center cursor-pointer hover:bg-foreground/5 transition-colors">
+            <span className="text-[13px] opacity-70">upload //</span>
           </div>
-          <textarea 
-            placeholder="type //"
-            className="border-r border-border px-4 pt-[34px] h-24 bg-transparent outline-none resize-none placeholder:text-foreground/70 hover:bg-foreground/5 transition-colors text-[14px] focus:bg-foreground/5 focus:placeholder:opacity-40 text-center placeholder:text-center"
-          />
-          <button type="button" className="p-4 h-24 flex items-center justify-center hover:bg-foreground/5 transition-colors group">
-            <span className="text-[14px] group-hover:opacity-100 opacity-70 text-center">speak //</span>
+          <div className="border-r border-border relative flex items-center justify-center hover:bg-foreground/5 transition-colors">
+            <textarea
+              placeholder="type //"
+              className="absolute inset-0 w-full h-full bg-transparent outline-none resize-none text-[13px] text-center flex items-center justify-center"
+              style={{paddingTop: '38px', paddingLeft: '8px', paddingRight: '8px'}}
+            />
+          </div>
+          <button type="button" className="flex items-center justify-center hover:bg-foreground/5 transition-colors">
+            <span className="text-[13px] opacity-70">speak //</span>
           </button>
         </div>
 
