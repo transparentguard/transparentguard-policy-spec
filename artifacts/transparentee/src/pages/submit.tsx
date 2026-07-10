@@ -181,7 +181,7 @@ export default function SubmitScreen() {
         <textarea
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
-          placeholder="describe your problem — paste equations, describe circuits, or just type what you're stuck on..."
+          placeholder="describe your problem. paste equations, describe circuits, or just type what you're stuck on..."
           className="w-full bg-transparent border border-border rounded-[4px] p-5 h-40 resize-none outline-none placeholder:text-foreground/40 text-[14px] hover:bg-foreground/5 transition-colors focus:bg-foreground/5"
         />
 

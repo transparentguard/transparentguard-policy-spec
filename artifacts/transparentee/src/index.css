@@ -19,8 +19,8 @@
 :root {
   --background: #F5F4F0;
   --foreground: #016B71;
-  --border: rgba(1, 107, 113, 0.15);
-  --input: rgba(1, 107, 113, 0.15);
+  --border: rgba(1, 107, 113, 0.3);
+  --input: rgba(1, 107, 113, 0.3);
   --ring: #016B71;
 
   --app-font-sans: 'Arimo', sans-serif;
@@ -30,8 +30,8 @@
 .dark {
   --background: #F5F4F0;
   --foreground: #016B71;
-  --border: rgba(1, 107, 113, 0.15);
-  --input: rgba(1, 107, 113, 0.15);
+  --border: rgba(1, 107, 113, 0.3);
+  --input: rgba(1, 107, 113, 0.3);
   --ring: #016B71;
 }
 
