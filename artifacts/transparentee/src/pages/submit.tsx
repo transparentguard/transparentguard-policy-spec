@@ -103,11 +103,19 @@ export default function SubmitScreen() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full max-w-[600px] mx-auto px-[24px] py-12 flex flex-col justify-center">
+    <div className="relative min-h-[100dvh] w-full flex flex-col items-center justify-center">
+
+      {/* Desktop logo — top-left, hidden on mobile */}
+      <div className="hidden md:flex flex-col gap-[2px] absolute top-8 left-10">
+        <span className="text-[20px] font-bold tracking-tight">[tee]</span>
+        <span className="text-[13px] font-normal opacity-70 leading-snug">transparent electrical<br />engineering</span>
+      </div>
+
+      <div className="w-full max-w-[600px] px-[24px] py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full mt-12 mb-24">
 
-        {/* Logo */}
-        <div className="text-[15px] font-semibold tracking-tight">[tee]</div>
+        {/* Mobile logo — hidden on desktop */}
+        <div className="md:hidden text-[15px] font-semibold tracking-tight">[tee]</div>
 
         {/* Upload + Speak row */}
         <div className="grid grid-cols-2 border border-border rounded-[4px] overflow-hidden" style={{ height: '96px' }}>
@@ -197,6 +205,7 @@ export default function SubmitScreen() {
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }
