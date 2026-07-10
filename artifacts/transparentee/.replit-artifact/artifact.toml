@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "TransparentEE"
+version = "1.0.0"
+id = "artifacts/transparentee"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18939
+
+[services.development]
+run = "pnpm --filter @workspace/transparentee run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/transparentee", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/transparentee/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18939"
+BASE_PATH = "/"
