@@ -22,4 +22,3 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-OPENROUTER_API_KEY = "sk-or-v1-daada7a881c697204efdcbedf1f73755870b2adad80d-d902ba1ddc19cd753fd0"

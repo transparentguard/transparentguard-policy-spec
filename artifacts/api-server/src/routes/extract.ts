@@ -57,7 +57,7 @@ router.post(
             // Scanned PDF with no extractable text — fall back to vision
             const base64 = file.buffer.toString("base64");
             const response = await client.chat.completions.create({
-              model: "google/gemini-2.0-flash-001",
+              model: "google/gemini-2.5-flash",
               messages: [
                 {
                   role: "user",
@@ -84,7 +84,7 @@ router.post(
           // Vision model reads the image and transcribes the problem precisely
           const base64 = file.buffer.toString("base64");
           const response = await client.chat.completions.create({
-            model: "google/gemini-2.0-flash-001",
+            model: "google/gemini-2.5-flash",
             messages: [
               {
                 role: "user",
