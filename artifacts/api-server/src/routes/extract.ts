@@ -70,7 +70,7 @@ router.post(
                     },
                     {
                       type: "text",
-                      text: "this is a scanned electrical engineering document. transcribe all text exactly as written, including all numbers, equations, component values, labels, and questions. describe any diagrams or circuits in detail.",
+                      text: "transcribe everything visible in this document exactly as it appears. include all text, numbers, equations, labels, and questions verbatim. describe any diagrams or visual elements clearly in plain language. do not add commentary or assume what kind of problem it is.",
                     },
                   ],
                 },
@@ -97,7 +97,7 @@ router.post(
                   },
                   {
                     type: "text",
-                    text: "this is an electrical engineering problem or diagram. do the following precisely: (1) transcribe all text verbatim, including every number, unit, label, and question. (2) describe the circuit or diagram topology in full detail including component types, values, and connections. (3) state clearly what is being asked or solved for. do not add any commentary or interpretation beyond what is shown.",
+                    text: "transcribe everything in this image exactly as it appears. include all text, numbers, equations, answer choices, and questions verbatim. if there is a diagram, figure, or circuit, describe it clearly in plain language. do not add numbered sections, headers, or commentary. output plain continuous text only.",
                   },
                 ],
               },

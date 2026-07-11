@@ -14,6 +14,7 @@ interface Message {
 export default function SessionScreen() {
   const [, setLocation] = useLocation();
   const [problem, setProblem] = useState('');
+  const [title, setTitle] = useState('');
   const [context, setContext] = useState('');
   const [cards, setCards] = useState<Card[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -33,7 +34,9 @@ export default function SessionScreen() {
     const parsed = JSON.parse(stored);
     const prob = parsed.problem ?? '';
     const ctx = parsed.context ?? '';
+    const ttl = parsed.title ?? prob.slice(0, 120);
     setProblem(prob);
+    setTitle(ttl);
     setContext(ctx);
     setReady(true);
     fetchCard(prob, ctx, []);
@@ -118,7 +121,7 @@ export default function SessionScreen() {
       {/* Sticky problem header */}
       <div className="sticky top-0 bg-background pt-8 pb-4 border-b border-border z-10">
         <p className="text-[11px] opacity-70 mb-1">problem</p>
-        <p className="text-[14px] font-bold">{problem}</p>
+        <p className="text-[14px] font-bold">{title}</p>
       </div>
 
       <div className="py-8 flex flex-col gap-6">

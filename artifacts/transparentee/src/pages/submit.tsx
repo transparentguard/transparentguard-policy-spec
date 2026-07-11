@@ -121,7 +121,9 @@ export default function SubmitScreen() {
     }
 
     const combined = [extractedText, problemText.trim()].filter(Boolean).join('\n\n');
-    sessionStorage.setItem('tee_problem', JSON.stringify({ problem: combined }));
+    const title = problemText.trim()
+      || uploadedFiles.map(f => f.name).join(', ');
+    sessionStorage.setItem('tee_problem', JSON.stringify({ problem: combined, title }));
     setLocation('/session/new');
   };
 
