@@ -1,0 +1,47 @@
+These five resources are professionally curated, 100% open-access, and widely utilized in graduate-level EE curricula. They are perfect for "baking" into your backend knowledge engine.
+1. Microwave and RF Design (5 Volumes)
+ Author: Michael Steer (North Carolina State University)
+ Why it’s essential: This is the industry-standard graduate OER for RF and microwave engineering. It covers everything from transmission line theory and network analysis to non-linear RF design and active circuits. It provides the high-level theoretical rigor required for any advanced RF or wireless R&D projects.
+2. Foundations of Applied Electromagnetics
+ Author: K. Sarabandi (University of Michigan)
+ Why it’s essential: Unlike introductory EM texts, this is explicitly written for graduate students. It bridges the gap between basic Maxwell’s equations and advanced topics like wave propagation in complex media, scattering, and antennas. It’s the "heavy lifting" math your AI needs for high-end antenna design or radar research.
+3. Control Systems: An Introduction
+ Author: Hassan Khalil (University of Michigan/MSU)
+ Why it’s essential: Khalil is a titan in control theory. This text is an excellent graduate-level resource that moves past basic PID loops into state-space modeling and stability analysis. It gives your backend the mathematical logic to reason through complex feedback loops and robotic control systems.
+4. Image Processing for Engineers
+ Author: A.E. Yagle and F.T. Ulaby (University of Michigan)
+ Why it’s essential: For researchers working in signal processing, computer vision, or sensor fusion, this book is an absolute gold mine. It covers the mathematical transforms and filtering techniques that underpin modern vision-based EE research, moving well beyond basic "filtering" into the realm of advanced data interpretation.
+5. Introduction to Communication Systems: An Interactive Approach
+ Author: Victor Frost (University of Kansas)
+ Why it’s essential: This text treats communications from an interactive, system-level perspective. It’s ideal for research into modern modulation theory, information theory, and digital signaling. It provides the rigorous backbone for understanding how modern wireless protocols (5G/6G research) and noise-limited channels actually function.
+Integration Plan: "The Graduate-Level Knowledge Engine"
+Since you are already setting up the ⁠/knowledge_base/⁠ structure, you should create a specific ⁠/research/⁠ sub-directory in your backend to house these advanced texts.
+1. Categorization:
+ ⁠/knowledge_base/research/rf_microwave/⁠ (Steer)
+ ⁠/knowledge_base/research/em_advanced/⁠ (Sarabandi)
+ ⁠/knowledge_base/research/controls/⁠ (Khalil)
+ ⁠/knowledge_base/research/signals_vision/⁠ (Yagle/Ulaby)
+ ⁠/knowledge_base/research/comms/⁠ (Frost)
+2. The "Expert Trigger":
+In your backend code, create a simple keyword-matching logic that identifies "Research-Grade" queries. If a student's prompt contains terms like "State-Space," "Smith Chart," "Link Budget," or "Maxwell's Wave Equation," your router should prioritize these five files in the ⁠system_prompt⁠ injection.
+3. The "PhD-Mode" Prompt:
+When these research files are triggered, adjust your system prompt slightly to encourage a higher level of complexity:
+"You are a senior research engineer. Use the attached advanced source material to provide a formal, rigorous solution. When possible, perform the derivation in full and discuss the trade-offs between methods as seen in professional academic literature."
+By splitting your knowledge base between the Foundational Library (your first 9 books) and the Research Library (these 5 books), your AI will effectively "switch gears" from tutor mode to research-assistant mode based on the complexity of the question asked.
+
+
+To ensure your AI has a rigorous mathematical foundation for all electrical engineering tasks—from basic circuit analysis to complex PhD-level signal processing—you should integrate these two highly reputable, open-source calculus resources. They are widely used in university curricula, completely free to download as PDFs, and possess the technical depth required for your "Knowledge Core."
+1. APEX Calculus
+ Authors: Gregory Hartman, Brian Heinold, Troy Siemers, Dimplekumar Chalishajar
+ Why it’s essential: This is a premier open-source calculus textbook series designed to be both rigorous and accessible. It is used by various universities and is highly regarded for its clarity and comprehensiveness. It covers everything from single-variable limits and derivatives to multivariable integration and vector calculus, providing the exact mathematical machinery your AI needs to handle the heavy derivations found in your Research and Codr tiers.
+2. Calculus (OpenStax)
+ Lead Authors: Gilbert Strang and Edwin Herman
+ Why it’s essential: Published by Rice University’s OpenStax initiative, this is a mainstream, peer-reviewed calculus series that spans three volumes. It is widely adopted because it mirrors the structure and high quality of commercially published textbooks. Because Gilbert Strang (a legendary name in mathematics and MIT education) is a lead author, this text provides a exceptionally strong mathematical backbone for the complex linear algebra and differential equations that frequently appear in EE signals, systems, and control theory.
+
+Implementation Plan for the Backend
+Just like your engineering library, you should treat these calculus texts as the "math engine" for your backend.
+Directory Setup: Add a new directory in your ⁠knowledge_base⁠ specifically for mathematics:
+
+/backend/knowledge_base/math/
+├── apex_calculus_series.txt
+└── openstax_calculus_vol_1_2_3.txt
