@@ -1,0 +1,62 @@
+### 2.3 Solution generation & presentation
+
+**Backend process (high level):**
+
+1. Image preprocessing (enhance contrast, deskew if needed).  
+2. OCR + layout detection (text + equations; basic diagram/schematic parsing where possible).  
+3. Topic classification:
+   - Circuits, Signals & Systems, Electronics, Control, Power, EM, RF, Comms, DSP, etc.  
+4. Problem type inference:
+   - E.g., “nodal analysis,” “transfer function derivation,” “fault current calculation,” “Bode plot sketch,” etc.  
+5. Solution generation via AI:
+   - Step-by-step reasoning.  
+   - Alternative methods (if applicable).  
+   - Source references (book + chapter/example-level).  
+   - Introspection prompts.  
+6. Post-processing:
+   - Format math nicely (LaTeX-style rendering).  
+   - Structure into sections.  
+   - Attach metadata (topic, course level, tags).
+
+**Frontend solution view:**
+
+Organized into clear sections:
+
+1. **Problem summary**
+   - Restated problem in text (as understood by AI).  
+   - List of knowns/unknowns.  
+   - Any assumptions (from image + user notes).
+
+2. **Approach overview**
+   - High-level method: “We’ll use nodal analysis with KCL at nodes A and B.”  
+   - Why this method: 1–2 sentences.
+
+3. **Guided steps** (core of TransparentEE)
+
+   Default: **guided mode** (encourages critical thinking):
+
+   - Steps are shown one at a time or in small groups.  
+   - Each step includes:
+     - What to do next.  
+     - Why (law/theorem/principle).  
+     - Sometimes a short question/prompt:
+       - “Which node would you choose as reference here, and why?”  
+       - “Before calculating, what form do you expect the transfer function to take?”  
+   - User clicks “Show next step” to continue.
+
+   Option: **reference mode**:
+   - All steps shown at once, like a traditional solution.
+
+   Each step includes:
+   - Math/equations (rendered nicely).  
+   - Short explanation.  
+   - citations tag (e.g., “[Nilsson & Riedel, Ch. 4]”).
+
+4. **Alternative methods** (if applicable)
+
+   - Section: “Other ways to solve this”  
+   - For each method:
+     - Brief description.  
+     - When it’s preferable.  
+     - Pros/cons vs the primary method.
+
