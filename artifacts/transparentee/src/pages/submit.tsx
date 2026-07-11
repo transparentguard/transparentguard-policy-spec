@@ -94,7 +94,12 @@ export default function SubmitScreen() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLocation('/session/demo');
+    if (!problemText.trim()) return;
+    sessionStorage.setItem('tee_problem', JSON.stringify({
+      problem: problemText.trim(),
+      context: '',
+    }));
+    setLocation('/session/new');
   };
 
   const fileLabel = (count: number) => {
