@@ -8,14 +8,27 @@ const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// POST /api/ai/solve
-// Body: { problem: string, context?: string, history?: { role: string, content: string }[] }
-// Streams back newline-delimited JSON chunks: { delta: string } or { done: true }
+const RULES = `
+- use lowercase throughout
+- never use em dashes or en dashes. use commas or periods instead
+- do not use filler words like "sure", "great", or "certainly"
+- no numbered lists or bullet points. write in plain prose
+- no bold or markdown formatting
+- never reveal the final answer`;
+
+const PROMPTS: Record<string, string> = {
+  summary: `you are an electrical engineering tutor. the student has submitted a problem. your job is to restate the problem clearly in your own words, identify what is known and what needs to be found, and name the topic area and relevant method or approach. write in plain prose. 4 to 6 sentences max.${RULES}`,
+
+  approach: `you are an electrical engineering tutor. you have just summarized the problem. now state the high-level approach you will take to guide the student through it and explain in 1 to 2 sentences why this method is appropriate for this type of problem. do not begin solving yet. 2 to 3 sentences max.${RULES}`,
+
+  step: `you are a socratic tutor for electrical engineering students. guide the student toward the answer one step at a time through focused questions and targeted hints. never give the answer directly. each response should tell the student what to think about next, name the law or principle that applies, and ask one focused question. if the student is stuck or gave a wrong answer, give a small hint and ask again. 3 to 5 sentences max. cite a relevant textbook section where helpful, e.g. nilsson and riedel ch. 4, at the end of your response in plain text.${RULES}`,
+};
+
 router.post("/ai/solve", async (req, res) => {
-  const { problem, context, history = [] } = req.body as {
+  const { problem, history = [], callIndex = 0 } = req.body as {
     problem: string;
-    context?: string;
     history?: { role: "user" | "assistant"; content: string }[];
+    callIndex?: number;
   };
 
   if (!problem?.trim()) {
@@ -23,24 +36,27 @@ router.post("/ai/solve", async (req, res) => {
     return;
   }
 
-  const systemPrompt = `you are a socratic tutor for electrical engineering students. your job is to guide students to the answer through questions and hints. never give the answer directly. be concise, precise, and encouraging. use lowercase. when referencing equations, wrap them in backticks. cite relevant textbook sections when helpful (e.g. nilsson and riedel ch. 4).
+  let systemPrompt: string;
+  if (callIndex === 0) systemPrompt = PROMPTS.summary;
+  else if (callIndex === 1) systemPrompt = PROMPTS.approach;
+  else systemPrompt = PROMPTS.step;
 
-rules:
-- ask one focused question at a time
-- if the student is stuck, give a small hint then ask again
-- never reveal the final answer
-- keep responses short, 2 to 4 sentences max per card
-- never use em dashes or en dashes (-- or -) in your response. use commas, periods, or rewrite the sentence instead
-- do not use the word "sure" or filler affirmations`;
-
-  const userContent = context
-    ? `problem: ${problem}\n\nadditional context: ${context}`
-    : `problem: ${problem}`;
+  const maxTokens = callIndex <= 1 ? 600 : 400;
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    ...history,
-    { role: "user", content: userContent },
+    // On the first two calls inject the problem as context, then pass history for subsequent steps
+    ...(callIndex === 0
+      ? [{ role: "user" as const, content: `problem:\n${problem}` }]
+      : callIndex === 1
+      ? [
+          { role: "user" as const, content: `problem:\n${problem}` },
+          ...history,
+        ]
+      : [
+          { role: "user" as const, content: `problem:\n${problem}` },
+          ...history,
+        ]),
   ];
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -53,14 +69,12 @@ rules:
       model: "deepseek/deepseek-r1",
       messages,
       stream: true,
-      max_tokens: 512,
+      max_tokens: maxTokens,
     });
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content ?? "";
-      if (delta) {
-        res.write(`data: ${JSON.stringify({ delta })}\n\n`);
-      }
+      if (delta) res.write(`data: ${JSON.stringify({ delta })}\n\n`);
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
