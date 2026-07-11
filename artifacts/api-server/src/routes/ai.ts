@@ -41,22 +41,14 @@ router.post("/ai/solve", async (req, res) => {
   else if (callIndex === 1) systemPrompt = PROMPTS.approach;
   else systemPrompt = PROMPTS.step;
 
-  const maxTokens = callIndex <= 1 ? 600 : 400;
+  // Gemini 2.5 Flash for fast analysis cards; R1 for deep Socratic steps
+  const model = callIndex <= 1 ? "google/gemini-2.5-flash" : "deepseek/deepseek-r1";
+  const maxTokens = callIndex <= 1 ? 600 : 1024;
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
-    // On the first two calls inject the problem as context, then pass history for subsequent steps
-    ...(callIndex === 0
-      ? [{ role: "user" as const, content: `problem:\n${problem}` }]
-      : callIndex === 1
-      ? [
-          { role: "user" as const, content: `problem:\n${problem}` },
-          ...history,
-        ]
-      : [
-          { role: "user" as const, content: `problem:\n${problem}` },
-          ...history,
-        ]),
+    { role: "user" as const, content: `problem:\n${problem}` },
+    ...history,
   ];
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -66,15 +58,23 @@ router.post("/ai/solve", async (req, res) => {
 
   try {
     const stream = await client.chat.completions.create({
-      model: "deepseek/deepseek-r1",
+      model,
       messages,
       stream: true,
       max_tokens: maxTokens,
     });
 
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content ?? "";
-      if (delta) res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const delta = chunk.choices[0]?.delta as any;
+      const content: string = delta?.content ?? "";
+      const reasoning: string = delta?.reasoning_content ?? "";
+      if (content) {
+        res.write(`data: ${JSON.stringify({ delta: content })}\n\n`);
+      } else if (reasoning) {
+        // Keep connection alive during R1 thinking phase
+        res.write(`: thinking\n\n`);
+      }
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
