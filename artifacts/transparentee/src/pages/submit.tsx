@@ -108,7 +108,7 @@ export default function SubmitScreen() {
       {/* Desktop logo — top-left, hidden on mobile */}
       <div className="hidden md:flex flex-col gap-[2px] absolute top-8 left-10">
         <span className="text-[20px] font-bold tracking-tight">[tee]</span>
-        <span className="text-[13px] font-normal opacity-70 leading-snug">transparent electrical<br />engineering</span>
+        <span className="text-[13px] font-normal opacity-90 leading-snug">transparent electrical<br />engineering</span>
       </div>
 
       <div className="w-full max-w-[600px] px-[24px] py-12">
@@ -126,7 +126,7 @@ export default function SubmitScreen() {
             onClick={() => fileInputRef.current?.click()}
           >
             {uploadedFiles.length === 0 ? (
-              <span className="text-[13px] opacity-70">upload //</span>
+              <span className="text-[13px] opacity-90">upload //</span>
             ) : (
               <>
                 <span className="text-[13px]">{fileLabel(uploadedFiles.length)}</span>

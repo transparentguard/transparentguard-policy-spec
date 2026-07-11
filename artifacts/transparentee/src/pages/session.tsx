@@ -37,7 +37,7 @@ export default function SessionScreen() {
   const [responses, setResponses] = useState<Record<string, string>>({});
   
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
+    const t = setTimeout(() => setLoading(false), 100);
     return () => clearTimeout(t);
   }, []);
 
@@ -66,7 +66,7 @@ export default function SessionScreen() {
   return (
     <div className="min-h-[100dvh] w-full max-w-[600px] mx-auto px-[24px] flex flex-col">
       <div className="sticky top-0 bg-background pt-8 pb-4 border-b border-border z-10">
-        <p className="text-[12px] opacity-60 mb-1">problem</p>
+        <p className="text-[12px] opacity-80 mb-1">problem</p>
         <p className="text-[14px] font-bold truncate">find the thevenin equivalent circuit with respect to terminals a,b</p>
       </div>
       
@@ -78,7 +78,7 @@ export default function SessionScreen() {
               key={card.id} 
               className={`border border-border p-6 transition-opacity duration-500 flex flex-col gap-4 ${isCurrent ? 'opacity-100' : 'opacity-45 pointer-events-none'}`}
             >
-              <p className="text-[14px] leading-[1.6]">{card.text}</p>
+              <p className="text-[14px] leading-[1.6] font-medium">{card.text}</p>
               
               {card.equation && (
                 <div className="bg-transparent border border-border p-4 text-[13px] font-mono mt-1 whitespace-pre-wrap">
@@ -87,7 +87,7 @@ export default function SessionScreen() {
               )}
               
               {card.citation && (
-                <p className="text-[11px] opacity-60 mt-1">{card.citation}</p>
+                <p className="text-[11px] opacity-80 mt-1">{card.citation}</p>
               )}
               
               {card.needsResponse && isCurrent && (
