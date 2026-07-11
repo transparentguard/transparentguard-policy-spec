@@ -198,21 +198,29 @@ export default function SubmitScreen() {
           <span className="text-[12px] opacity-50 -mt-3">{speechError}</span>
         )}
 
-        {/* File list */}
+        {/* File list + context tooltip */}
         {uploadedFiles.length > 0 && (
-          <div className="flex flex-col gap-1 -mt-3">
-            {uploadedFiles.map((f, i) => (
-              <div key={i} className="flex items-center justify-between text-[12px] opacity-60">
-                <span className="truncate max-w-[480px]">{f.name}</span>
-                <button
-                  type="button"
-                  onClick={() => removeFile(i)}
-                  className="ml-4 opacity-40 hover:opacity-80 transition-opacity flex-shrink-0"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+          <div className="flex flex-col gap-3 -mt-2">
+            {/* File names */}
+            <div className="flex flex-col gap-1">
+              {uploadedFiles.map((f, i) => (
+                <div key={i} className="flex items-center justify-between text-[12px] opacity-60">
+                  <span className="truncate max-w-[480px]">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="ml-4 opacity-40 hover:opacity-80 transition-opacity flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Tooltip */}
+            <div className="border border-border rounded-[4px] px-4 py-3 text-[12px] leading-relaxed opacity-80">
+              file attached. use the box below to add any context that might help. note what you are solving for, any known values, or where you are stuck.
+            </div>
           </div>
         )}
 
@@ -220,7 +228,11 @@ export default function SubmitScreen() {
         <textarea
           value={problemText}
           onChange={e => setProblemText(e.target.value)}
-          placeholder="describe your problem. paste equations, describe circuits, or just type what you're stuck on..."
+          placeholder={
+            uploadedFiles.length > 0
+              ? 'add context. note any known values, what you are solving for, or where you are stuck...'
+              : 'describe your problem. paste equations, describe circuits, or just type what you are stuck on...'
+          }
           className="w-full bg-transparent border border-border rounded-[4px] p-5 h-40 resize-none outline-none placeholder:text-foreground/40 text-[14px] hover:bg-foreground/5 transition-colors focus:bg-foreground/5"
         />
 
