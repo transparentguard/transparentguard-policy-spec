@@ -16,6 +16,8 @@ export default function SubmitScreen() {
   const [problemText, setProblemText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [speechError, setSpeechError] = useState('');
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Clean up recognition on unmount
@@ -92,13 +94,34 @@ export default function SubmitScreen() {
     recognition.start();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!problemText.trim()) return;
-    sessionStorage.setItem('tee_problem', JSON.stringify({
-      problem: problemText.trim(),
-      context: '',
-    }));
+    const hasText = problemText.trim().length > 0;
+    const hasFiles = uploadedFiles.length > 0;
+    if (!hasText && !hasFiles) return;
+
+    setExtractError('');
+    let extractedText = '';
+
+    if (hasFiles) {
+      setExtracting(true);
+      try {
+        const formData = new FormData();
+        uploadedFiles.forEach(f => formData.append('files', f));
+        const res = await fetch('/api/extract', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(`extraction failed (${res.status})`);
+        const data = await res.json() as { text: string };
+        extractedText = data.text ?? '';
+      } catch (err) {
+        setExtractError(err instanceof Error ? err.message : 'could not read files');
+        setExtracting(false);
+        return;
+      }
+      setExtracting(false);
+    }
+
+    const combined = [extractedText, problemText.trim()].filter(Boolean).join('\n\n');
+    sessionStorage.setItem('tee_problem', JSON.stringify({ problem: combined }));
     setLocation('/session/new');
   };
 
@@ -201,12 +224,17 @@ export default function SubmitScreen() {
           className="w-full bg-transparent border border-border rounded-[4px] p-5 h-40 resize-none outline-none placeholder:text-foreground/40 text-[14px] hover:bg-foreground/5 transition-colors focus:bg-foreground/5"
         />
 
+        {extractError && (
+          <p className="text-[12px] opacity-60 -mt-2">{extractError}</p>
+        )}
+
         <div className="flex justify-end">
           <button
             type="submit"
-            className="bg-black text-white px-6 py-2.5 text-[14px] font-bold hover:bg-black/80 transition-colors rounded-[2px]"
+            disabled={extracting}
+            className="bg-black text-white px-6 py-2.5 text-[14px] font-bold hover:bg-black/80 transition-colors rounded-[2px] disabled:opacity-50"
           >
-            solve &rarr;
+            {extracting ? 'reading files...' : 'solve \u2192'}
           </button>
         </div>
       </form>
