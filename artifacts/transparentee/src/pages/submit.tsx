@@ -143,7 +143,10 @@ export default function SubmitScreen() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full mt-12 mb-24">
 
         {/* Mobile logo — hidden on desktop */}
-        <div className="md:hidden text-[15px] font-semibold tracking-tight">[tee]</div>
+        <div className="md:hidden flex flex-col gap-[2px]">
+          <span className="text-[20px] font-bold tracking-tight">[tee]</span>
+          <span className="text-[13px] font-normal opacity-90 leading-snug">transparent electrical<br />engineering</span>
+        </div>
 
         {/* Upload + Speak row */}
         <div className="grid grid-cols-2 border border-border rounded-[4px] overflow-hidden" style={{ height: '96px' }}>
