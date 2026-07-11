@@ -11,11 +11,12 @@ const client = new OpenAI({
 const RULES = `
 - speak directly to the person using "you" and "your". never refer to them in the third person
 - never use the word "student". address the person directly
-- use lowercase throughout
+- use lowercase throughout for all prose
 - never use em dashes or en dashes. use commas or periods instead
 - do not use filler words like "sure", "great", or "certainly"
 - no numbered lists or bullet points. write in plain prose
-- no bold or markdown formatting
+- no bold or markdown formatting in prose
+- always write ALL mathematical expressions, equations, variables, and symbols in LaTeX notation. wrap inline math in $...$ and display equations on their own line in $...$. never write math in word form. for example write $\\frac{k}{s^2+k^2}$ not "k divided by s squared plus k squared", write $V_{th}$ not "Vth", write $\\omega_0 = \\frac{1}{\\sqrt{LC}}$ not "omega naught equals one over root LC"
 - never reveal the final answer`;
 
 const PROMPTS: Record<string, string> = {

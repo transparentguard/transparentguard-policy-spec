@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import MathText from '@/components/MathText';
 
 declare global {
   interface Window {
@@ -300,7 +301,7 @@ export default function HomePage() {
                   isLast ? 'opacity-100' : 'opacity-30 pointer-events-none'
                 }`}
               >
-                <p className="text-[14px] leading-[1.7] font-medium whitespace-pre-wrap">{card.text}</p>
+                <p className="text-[14px] leading-[1.7] font-medium"><MathText text={card.text} /></p>
                 {isLast && (
                   <div className="flex flex-col gap-3 mt-2">
                     <textarea
@@ -324,8 +325,8 @@ export default function HomePage() {
           {/* Streaming card */}
           {streaming && (
             <div className="border border-border rounded-[4px] p-6">
-              <p className="text-[14px] leading-[1.7] font-medium whitespace-pre-wrap">
-                {streamingText || <span className="opacity-30">thinking...</span>}
+              <p className="text-[14px] leading-[1.7] font-medium">
+                {streamingText ? <MathText text={streamingText} /> : <span className="opacity-30">thinking...</span>}
               </p>
             </div>
           )}
