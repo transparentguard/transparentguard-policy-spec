@@ -9,6 +9,8 @@ const client = new OpenAI({
 });
 
 const RULES = `
+- speak directly to the person using "you" and "your". never refer to them in the third person
+- never use the word "student". address the person directly
 - use lowercase throughout
 - never use em dashes or en dashes. use commas or periods instead
 - do not use filler words like "sure", "great", or "certainly"
@@ -17,11 +19,11 @@ const RULES = `
 - never reveal the final answer`;
 
 const PROMPTS: Record<string, string> = {
-  summary: `you are an electrical engineering tutor. the student has submitted a problem. your job is to restate the problem clearly in your own words, identify what is known and what needs to be found, and name the topic area and relevant method or approach. write in plain prose. 4 to 6 sentences max.${RULES}`,
+  summary: `you are an electrical engineering tutor. someone has submitted a problem for you to help them work through. restate the problem clearly to them in your own words, tell them what is known and what needs to be found, and name the topic area and relevant method. write in plain prose addressed directly to the person. 4 to 6 sentences max.${RULES}`,
 
-  approach: `you are an electrical engineering tutor. you have just summarized the problem. now state the high-level approach you will take to guide the student through it and explain in 1 to 2 sentences why this method is appropriate for this type of problem. do not begin solving yet. 2 to 3 sentences max.${RULES}`,
+  approach: `you are an electrical engineering tutor. you have just summarized the problem. now tell the person what high-level approach you will take to guide them through it and explain in 1 to 2 sentences why this method fits this type of problem. do not begin solving yet. speak directly to them. 2 to 3 sentences max.${RULES}`,
 
-  step: `you are a socratic tutor for electrical engineering students. guide the student toward the answer one step at a time through focused questions and targeted hints. never give the answer directly. each response should tell the student what to think about next, name the law or principle that applies, and ask one focused question. if the student is stuck or gave a wrong answer, give a small hint and ask again. 3 to 5 sentences max. cite a relevant textbook section where helpful, e.g. nilsson and riedel ch. 4, at the end of your response in plain text.${RULES}`,
+  step: `you are a socratic tutor for electrical engineering. guide the person toward the answer one step at a time through focused questions and targeted hints. never give the answer directly. each response should tell them what to think about next, name the law or principle that applies, and ask one focused question. if they are stuck or gave a wrong answer, give a small hint and ask again. 3 to 5 sentences max. cite a relevant textbook section where helpful, e.g. nilsson and riedel ch. 4, at the end of your response in plain text.${RULES}`,
 };
 
 router.post("/ai/solve", async (req, res) => {
@@ -83,6 +85,35 @@ router.post("/ai/solve", async (req, res) => {
     const message = err instanceof Error ? err.message : "ai error";
     res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     res.end();
+  }
+});
+
+// POST /api/ai/title
+// Returns a short 4-7 word title for the problem
+router.post("/ai/title", async (req, res) => {
+  const { problem } = req.body as { problem: string };
+  if (!problem?.trim()) {
+    res.status(400).json({ error: "problem is required" });
+    return;
+  }
+  try {
+    const completion = await client.chat.completions.create({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: "generate a short title of 4 to 7 words that describes this problem. lowercase only. no punctuation. no filler words. output only the title, nothing else.",
+        },
+        { role: "user", content: problem },
+      ],
+      max_tokens: 30,
+      stream: false,
+    });
+    const title = completion.choices[0]?.message?.content?.trim() ?? "";
+    res.json({ title });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "title generation failed";
+    res.status(500).json({ error: message });
   }
 });
 

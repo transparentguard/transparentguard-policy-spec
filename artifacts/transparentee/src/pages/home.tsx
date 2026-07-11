@@ -109,10 +109,19 @@ export default function HomePage() {
     setProblem(combined);
     setTitle(ttl);
 
-    // slide the form up, then start streaming
+    // slide the form up, then generate title + start streaming
     setPhase('sliding');
-    setTimeout(() => {
+    setTimeout(async () => {
       setPhase('session');
+      // Generate a proper title in parallel with the first card
+      fetch('/api/ai/title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problem: combined }),
+      })
+        .then(r => r.json())
+        .then((data: { title?: string }) => { if (data.title) setTitle(data.title); })
+        .catch(() => { /* keep filename fallback */ });
       fetchCard(combined, [], 0);
     }, 620);
   };
