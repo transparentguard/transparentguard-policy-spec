@@ -1,0 +1,1240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transparentguard.dev/schema/tps-v1.json",
+  "title": "TransparentGuard Policy Spec v1.0",
+  "description": "JSON Schema for validating TransparentGuard Policy Spec (TPS) v1.0 policy files. Includes all fields from the base spec plus the eight strengthening extensions: deny-by-default, policy inheritance, agentic tool call rules, canary tokens, rule sampling, streaming-aware enforcement, cryptographic signing, and policy testing syntax.",
+  "type": "object",
+  "required": ["tps_version", "name", "rules", "audit"],
+  "additionalProperties": false,
+  "properties": {
+
+    "tps_version": {
+      "type": "string",
+      "description": "The version of the TransparentGuard Policy Spec this file targets.",
+      "enum": ["1.0"],
+      "examples": ["1.0"]
+    },
+
+    "name": {
+      "type": "string",
+      "description": "A human-readable identifier for this policy. Used in audit events, error messages, and CLI output.",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+      "examples": ["production-hipaa", "basic-safety-v2"]
+    },
+
+    "description": {
+      "type": "string",
+      "description": "A plain-text description of the policy purpose, scope, and audience.",
+      "maxLength": 512
+    },
+
+    "extends": {
+      "type": "string",
+      "description": "A URI reference to a base policy file. The current file inherits all rules and settings from the base and declares only overrides. Supports local file paths, tps:// registry URIs, and https:// URIs. The http:// scheme is not permitted.",
+      "minLength": 1,
+      "examples": [
+        "./base.yaml",
+        "../shared/corporate-baseline.yaml",
+        "tps://transparentguard.dev/policies/hipaa-base-v1",
+        "https://your-policy-server.internal/policies/corporate-base.yaml"
+      ]
+    },
+
+    "default_action": {
+      "type": "string",
+      "description": "Default behavior when no rule makes an explicit decision about a call. 'allow' is the permissive default. 'deny' is the zero-trust posture: anything not explicitly permitted is blocked.",
+      "enum": ["allow", "deny"],
+      "default": "allow"
+    },
+
+    "provider": {
+      "description": "The LLM providers this policy applies to. Use 'any' for all providers.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["any"],
+          "description": "Apply this policy to all providers."
+        },
+        {
+          "type": "array",
+          "description": "Apply this policy only to the listed provider identifiers.",
+          "items": {
+            "type": "string",
+            "pattern": "^(any|[a-zA-Z0-9_-]+/[a-zA-Z0-9_.\\-*]+|custom/[a-zA-Z0-9_-]+)$",
+            "examples": ["openai/gpt-4o", "anthropic/*", "ollama/*"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ],
+      "default": "any"
+    },
+
+    "environments": {
+      "type": "array",
+      "description": "Named environments with environment-specific overrides.",
+      "items": {
+        "$ref": "#/$defs/environment"
+      },
+      "uniqueItems": true
+    },
+
+    "rules": {
+      "type": "array",
+      "description": "The list of policy rules to enforce. Evaluated in declared order.",
+      "items": {
+        "$ref": "#/$defs/rule"
+      },
+      "minItems": 1
+    },
+
+    "compliance_frameworks": {
+      "type": "array",
+      "description": "Pre-built compliance rule sets to activate.",
+      "items": {
+        "type": "string",
+        "enum": ["hipaa", "gdpr", "eu-ai-act", "soc2", "fedramp-moderate", "ccpa"],
+        "description": "A supported compliance framework identifier."
+      },
+      "uniqueItems": true,
+      "examples": [["hipaa", "soc2"]]
+    },
+
+    "audit": {
+      "$ref": "#/$defs/audit"
+    },
+
+    "signature": {
+      "$ref": "#/$defs/signature"
+    },
+
+    "tests": {
+      "type": "array",
+      "description": "Inline unit tests for this policy. Executed by 'transparentguard test'. Tests do not make real LLM calls.",
+      "items": {
+        "$ref": "#/$defs/policy_test"
+      }
+    },
+
+    "thresholds": {
+      "type": "array",
+      "description": "Automated breach detection and notification triggers. Each entry watches one rule and fires an action when a declared count of violations accumulates within a rolling time window. The discovery_timestamp in the resulting threshold_triggered audit event is the legally significant detection timestamp for regulatory breach notification deadline calculations.",
+      "items": {
+        "$ref": "#/$defs/threshold"
+      }
+    }
+
+  },
+
+  "$defs": {
+
+    "environment": {
+      "type": "object",
+      "description": "A named environment with optional overrides.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The identifier for this environment.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9-]+$",
+          "examples": ["production", "staging", "dev"]
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "When true, unknown providers are blocked and evaluation errors terminate calls.",
+          "default": false
+        },
+        "active_rules": {
+          "type": "array",
+          "description": "When present, only these rule IDs are evaluated in this environment.",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+          },
+          "uniqueItems": true
+        },
+        "disabled_rules": {
+          "type": "array",
+          "description": "Rule IDs to skip in this environment. Mutually exclusive with active_rules.",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+          },
+          "uniqueItems": true
+        },
+        "on_unknown_provider": {
+          "type": "string",
+          "description": "Behavior when a request targets a provider not in the policy provider list.",
+          "enum": ["block", "warn", "allow"]
+        }
+      },
+      "not": {
+        "required": ["active_rules", "disabled_rules"],
+        "description": "active_rules and disabled_rules are mutually exclusive."
+      }
+    },
+
+    "rule": {
+      "type": "object",
+      "description": "A single policy rule.",
+      "required": ["id", "stage", "action"],
+      "additionalProperties": false,
+      "properties": {
+
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this rule. Must not begin with 'tg_framework_' (reserved prefix).",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(?!tg_framework_)[a-zA-Z][a-zA-Z0-9_-]*$",
+          "examples": ["block-pii-outbound", "enforce-token-budget", "restrict-agent-tools"]
+        },
+
+        "description": {
+          "type": "string",
+          "description": "Plain-text explanation of what this rule enforces and why.",
+          "maxLength": 512
+        },
+
+        "enabled": {
+          "type": "boolean",
+          "description": "When false, the rule is parsed but never evaluated.",
+          "default": true
+        },
+
+        "stage": {
+          "type": "string",
+          "description": "The point in the LLM call lifecycle at which this rule is evaluated.",
+          "enum": ["pre-request", "post-response", "both", "tool-call"]
+        },
+
+        "action": {
+          "type": "string",
+          "description": "The type of check this rule performs.",
+          "enum": ["redact", "classify", "enforce", "tag", "block", "log"]
+        },
+
+        "targets": {
+          "type": "array",
+          "description": "What the rule is scanning for. Required for redact and classify actions.",
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 1
+        },
+
+        "classifier": {
+          "type": "string",
+          "description": "The classifier to use for classify action rules.",
+          "examples": [
+            "built-in/prompt-injection-v2",
+            "built-in/toxicity-v1",
+            "built-in/hate-speech-v1",
+            "built-in/factual-grounding-v1"
+          ]
+        },
+
+        "threshold": {
+          "type": "number",
+          "description": "Score threshold for classify action rules. Violation triggered at or above this value (or below when invert_threshold is true).",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+
+        "invert_threshold": {
+          "type": "boolean",
+          "description": "When true, violation is triggered when score is BELOW the threshold. Used for grounding classifiers where a low score indicates insufficient grounding.",
+          "default": false
+        },
+
+        "enforce_type": {
+          "type": "string",
+          "description": "The enforcement type for enforce action rules.",
+          "enum": [
+            "provider_allowlist",
+            "token_budget",
+            "data_residency",
+            "rate_limit",
+            "tool_allowlist",
+            "schema_validation",
+            "confidentiality",
+            "factual_grounding"
+          ]
+        },
+
+        "allowed_providers": {
+          "type": "array",
+          "description": "For provider_allowlist enforce rules. Permitted provider identifiers.",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+
+        "max_tokens_per_request": {
+          "type": "integer",
+          "description": "For token_budget enforce rules. Maximum tokens allowed in a single request.",
+          "minimum": 1
+        },
+
+        "max_tokens_per_day_per_key": {
+          "type": "integer",
+          "description": "For token_budget enforce rules. Maximum tokens per API key per calendar day.",
+          "minimum": 1
+        },
+
+        "max_tokens_per_hour_per_key": {
+          "type": "integer",
+          "description": "For token_budget enforce rules. Maximum tokens per API key per hour.",
+          "minimum": 1
+        },
+
+        "allowed_regions": {
+          "type": "array",
+          "description": "For data_residency enforce rules. Provider regions that are permitted.",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "examples": [["eu-west-1", "eu-central-1"]]
+        },
+
+        "max_requests_per_minute_per_key": {
+          "type": "integer",
+          "description": "For rate_limit enforce rules.",
+          "minimum": 1
+        },
+
+        "max_requests_per_hour_per_key": {
+          "type": "integer",
+          "description": "For rate_limit enforce rules.",
+          "minimum": 1
+        },
+
+        "allowed_tools": {
+          "type": "array",
+          "description": "For tool_allowlist enforce rules. Tools the agent is permitted to call. If only allowed_tools is present, any tool not in this list is blocked.",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "examples": [["web_search", "code_interpreter", "file_read"]]
+        },
+
+        "blocked_tools": {
+          "type": "array",
+          "description": "For tool_allowlist enforce rules. Tools the agent is explicitly prohibited from calling. Evaluated before allowed_tools. A tool in both lists is blocked.",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "examples": [["send_email", "delete_file", "execute_shell"]]
+        },
+
+        "tool_argument_targets": {
+          "type": "array",
+          "description": "For tool_allowlist enforce rules. Scans tool call arguments for content matching these targets. Uses the same target schema as redact rules.",
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 1
+        },
+
+        "expected_schema": {
+          "type": "object",
+          "description": "For schema_validation enforce rules. A JSON Schema the response must conform to."
+        },
+
+        "protected_content_ref": {
+          "type": "string",
+          "description": "For confidentiality enforce rules. The part of the request whose content must not appear in the response.",
+          "enum": ["system_prompt", "context_documents", "user_provided_data"]
+        },
+
+        "similarity_threshold": {
+          "type": "number",
+          "description": "For confidentiality enforce rules. Cosine similarity at or above which a response is considered a leak of the protected content.",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.85
+        },
+
+        "canary_tokens": {
+          "type": "boolean",
+          "description": "For confidentiality enforce rules. When true, embeds a random token into the protected content at request time and detects its presence in the response. Binary exact-match detection with no false positives. Complements similarity_threshold detection.",
+          "default": false
+        },
+
+        "tags": {
+          "type": "object",
+          "description": "For tag action rules. Key-value pairs to attach to the call and include in audit events.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+
+        "block_message": {
+          "type": "string",
+          "description": "For block action rules. Human-readable message returned to the application when the call is blocked.",
+          "maxLength": 256
+        },
+
+        "log_level": {
+          "type": "string",
+          "description": "For log action rules. The severity level of the emitted audit event.",
+          "enum": ["debug", "info", "warn"],
+          "default": "info"
+        },
+
+        "on_violation": {
+          "type": "string",
+          "description": "What happens when this rule detects a violation. Must be omitted for tag, block, and log action rules.",
+          "enum": ["block", "redact", "warn", "log", "allow"]
+        },
+
+        "log": {
+          "type": "boolean",
+          "description": "When true, every evaluation of this rule produces an audit event regardless of whether a violation occurred.",
+          "default": true
+        },
+
+        "sample_rate": {
+          "type": "number",
+          "description": "Evaluates this rule on only this fraction of calls. 1.0 means every call. 0.10 means approximately 10% of calls. The sampling decision is derived from the call's request_id and this rule's id for deterministic replay. Rules with on_violation: block SHOULD document the rationale in metadata.sampling_rationale before using a value below 1.0.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0
+        },
+
+        "streaming": {
+          "$ref": "#/$defs/rule_streaming"
+        },
+
+        "metadata": {
+          "type": "object",
+          "description": "Arbitrary key-value pairs attached to this rule and included in all audit events it produces.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" }
+            ]
+          }
+        }
+
+      },
+
+      "allOf": [
+        {
+          "if": {
+            "properties": { "action": { "enum": ["redact", "classify"] } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["targets"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "action": { "const": "classify" } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["classifier", "threshold"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "action": { "const": "enforce" } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["enforce_type"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "action": { "enum": ["tag", "block", "log"] } },
+            "required": ["action"]
+          },
+          "then": {
+            "not": { "required": ["on_violation"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "action": { "enum": ["redact", "classify", "enforce"] } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["on_violation"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "enforce_type": { "const": "provider_allowlist" } },
+            "required": ["enforce_type"]
+          },
+          "then": {
+            "required": ["allowed_providers"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "enforce_type": { "const": "data_residency" } },
+            "required": ["enforce_type"]
+          },
+          "then": {
+            "required": ["allowed_regions"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "enforce_type": { "const": "schema_validation" } },
+            "required": ["enforce_type"]
+          },
+          "then": {
+            "required": ["expected_schema"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "enforce_type": { "const": "tool_allowlist" } },
+            "required": ["enforce_type"]
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["allowed_tools"] },
+              { "required": ["blocked_tools"] }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": { "stage": { "const": "tool-call" } },
+            "required": ["stage"]
+          },
+          "then": {
+            "properties": {
+              "action": {
+                "enum": ["enforce", "tag", "log", "block"],
+                "description": "tool-call stage rules are limited to enforce, tag, log, and block actions."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "streaming": { "properties": { "mode": { "const": "window" } } }
+            }
+          },
+          "then": {
+            "properties": {
+              "streaming": {
+                "properties": {
+                  "window_tokens": {
+                    "description": "Required when streaming mode is window."
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+
+    },
+
+    "rule_streaming": {
+      "type": "object",
+      "description": "Streaming behavior for post-response rules. Overrides the global audit.streaming default for this rule.",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "How this rule processes a streaming response. buffer: hold all chunks, evaluate complete response, then release. window: evaluate a rolling window of recent tokens as the stream arrives. passthrough: skip this rule for streaming responses and emit a sampled_out audit event.",
+          "enum": ["buffer", "window", "passthrough"]
+        },
+        "window_tokens": {
+          "type": "integer",
+          "description": "Size of the rolling evaluation window in tokens. Only valid when mode is window.",
+          "minimum": 1,
+          "default": 256
+        },
+        "on_stream_violation": {
+          "type": "string",
+          "description": "What to do when a violation is detected mid-stream. block: terminate the stream immediately and send an error event. passthrough_and_log: allow the stream to continue but emit a violation audit event. Defaults to the rule's on_violation value.",
+          "enum": ["block", "passthrough_and_log"]
+        }
+      }
+    },
+
+    "target": {
+      "type": "object",
+      "description": "A target definition describing what a rule is scanning for.",
+      "required": ["type"],
+      "oneOf": [
+        { "$ref": "#/$defs/pii_target" },
+        { "$ref": "#/$defs/pattern_target" },
+        { "$ref": "#/$defs/keyword_target" },
+        { "$ref": "#/$defs/semantic_target" }
+      ]
+    },
+
+    "pii_target": {
+      "type": "object",
+      "required": ["type", "categories"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "pii"
+        },
+        "categories": {
+          "type": "array",
+          "description": "PII category identifiers to detect.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "name", "email", "phone", "address", "ip_address", "username",
+              "device_id", "url",
+              "ssn", "passport", "driver_license", "national_id", "tax_id", "voter_id",
+              "credit_card", "bank_account", "iban", "swift", "crypto_address",
+              "mrn", "dob", "age", "health_condition", "insurance_id", "npi", "dea",
+              "race", "religion", "political_opinion", "sexual_orientation",
+              "biometric", "genetic", "union_membership",
+              "phi", "pii_standard", "pii_financial", "pii_sensitive", "pii_all"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "confidence_threshold": {
+          "type": "number",
+          "description": "Minimum classifier confidence to treat a detected entity as a match.",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.80
+        }
+      }
+    },
+
+    "pattern_target": {
+      "type": "object",
+      "required": ["type", "pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "pattern"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "A regular expression string in ECMA-262 dialect.",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable name for what this pattern matches.",
+          "maxLength": 256
+        },
+        "flags": {
+          "type": "array",
+          "description": "Optional regex flags.",
+          "items": {
+            "type": "string",
+            "enum": ["case_insensitive", "multiline", "dotall"]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "keyword_target": {
+      "type": "object",
+      "required": ["type", "keywords"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "keyword"
+        },
+        "keywords": {
+          "type": "array",
+          "description": "Strings to match.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "match_mode": {
+          "type": "string",
+          "description": "Whether to match whole words only or anywhere in the text.",
+          "enum": ["whole_word", "substring"],
+          "default": "whole_word"
+        },
+        "case_sensitive": {
+          "type": "boolean",
+          "description": "Whether matching is case-sensitive.",
+          "default": true
+        }
+      }
+    },
+
+    "semantic_target": {
+      "type": "object",
+      "required": ["type", "concepts"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "semantic"
+        },
+        "concepts": {
+          "type": "array",
+          "description": "Concept descriptions. Content semantically similar to any of these triggers a match.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "similarity_threshold": {
+          "type": "number",
+          "description": "Cosine similarity at or above which content is considered a match.",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.80
+        },
+        "model": {
+          "type": "string",
+          "description": "The embedding model to use.",
+          "default": "built-in/semantic-v1"
+        }
+      }
+    },
+
+    "audit": {
+      "type": "object",
+      "description": "Audit event configuration.",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, audit events are emitted for every evaluation."
+        },
+        "destination": {
+          "type": "string",
+          "description": "URI where audit events are written. Supported schemes: file://, s3://, gs://, az://, postgres://, http://, stdout://",
+          "examples": [
+            "file://./logs/audit.jsonl",
+            "s3://my-bucket/tg-logs/",
+            "postgres://host/db/audit_events",
+            "stdout://"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "description": "Audit event serialization format.",
+          "enum": ["ndjson", "json"],
+          "default": "ndjson"
+        },
+        "retention_days": {
+          "type": "integer",
+          "description": "Number of days audit logs should be retained. Regulatory minimums: HIPAA 2555, SOC 2 365.",
+          "minimum": 1,
+          "default": 365
+        },
+        "include_redacted_content": {
+          "type": "boolean",
+          "description": "When true, original content of redacted spans is stored in audit events in an encrypted field. WARNING: enables PII and PHI to flow into audit storage.",
+          "default": false
+        },
+        "include_full_request": {
+          "type": "boolean",
+          "description": "When true, the full request payload is included in audit events.",
+          "default": false
+        },
+        "include_full_response": {
+          "type": "boolean",
+          "description": "When true, the full response payload is included in audit events.",
+          "default": false
+        },
+        "events": {
+          "type": "array",
+          "description": "Which event types to write to the audit destination.",
+          "items": {
+            "type": "string",
+            "enum": ["allowed", "blocked", "redacted", "warned", "error"]
+          },
+          "uniqueItems": true,
+          "default": ["allowed", "blocked", "redacted", "warned", "error"]
+        },
+        "batch_size": {
+          "type": "integer",
+          "description": "Number of events to buffer before writing. Use 1 for file destinations to prevent event loss.",
+          "minimum": 1,
+          "default": 100
+        },
+        "flush_interval_ms": {
+          "type": "integer",
+          "description": "Maximum milliseconds to hold events before flushing even if buffer is not full.",
+          "minimum": 100,
+          "default": 5000
+        },
+        "notify": {
+          "type": "array",
+          "description": "Real-time webhook notifications for violation events. Delivered asynchronously and do not affect call evaluation outcome.",
+          "items": {
+            "$ref": "#/$defs/audit_notify"
+          }
+        },
+        "streaming": {
+          "$ref": "#/$defs/audit_streaming"
+        },
+        "chain_integrity": {
+          "$ref": "#/$defs/audit_chain_integrity"
+        }
+      },
+      "if": {
+        "properties": { "enabled": { "const": true } }
+      },
+      "then": {
+        "required": ["destination"]
+      }
+    },
+
+    "audit_notify": {
+      "type": "object",
+      "description": "A webhook notification target for violation events.",
+      "required": ["url", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The full HTTPS URL to POST notifications to. HTTP is not permitted in strict environments.",
+          "format": "uri",
+          "pattern": "^https://",
+          "examples": [
+            "https://alerts.internal/tg-violations",
+            "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+          ]
+        },
+        "events": {
+          "type": "array",
+          "description": "Event types that trigger a notification. 'allowed' is not valid here.",
+          "items": {
+            "type": "string",
+            "enum": ["blocked", "redacted", "warned", "error"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "method": {
+          "type": "string",
+          "description": "HTTP method to use for notifications.",
+          "enum": ["POST"],
+          "default": "POST"
+        },
+        "headers": {
+          "type": "object",
+          "description": "HTTP headers to include. Values MUST use environment variable interpolation syntax (${VAR_NAME}) and MUST NOT be hardcoded secrets.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "description": "Maximum milliseconds to wait for the notification endpoint to respond.",
+          "minimum": 100,
+          "maximum": 30000,
+          "default": 3000
+        },
+        "retry": {
+          "type": "object",
+          "description": "Retry configuration for failed notification deliveries.",
+          "additionalProperties": false,
+          "properties": {
+            "max_attempts": {
+              "type": "integer",
+              "description": "Maximum delivery attempts including the first attempt.",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 3
+            },
+            "backoff_ms": {
+              "type": "integer",
+              "description": "Initial backoff between retries in milliseconds. Doubles on each retry (exponential backoff).",
+              "minimum": 100,
+              "default": 500
+            }
+          }
+        }
+      }
+    },
+
+    "audit_streaming": {
+      "type": "object",
+      "description": "Global default streaming enforcement behavior for all post-response rules that do not declare their own streaming field.",
+      "required": ["mode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "How post-response rules process streaming responses by default. buffer: hold all chunks, evaluate complete response. window: evaluate a rolling window of recent tokens. passthrough: skip post-response rules for streaming responses.",
+          "enum": ["buffer", "window", "passthrough"],
+          "default": "buffer"
+        },
+        "window_tokens": {
+          "type": "integer",
+          "description": "Size of the rolling evaluation window in tokens. Only used when mode is window.",
+          "minimum": 1,
+          "default": 256
+        },
+        "on_stream_violation": {
+          "type": "string",
+          "description": "Default behavior when a violation is detected mid-stream. block: terminate stream. passthrough_and_log: continue stream and log violation.",
+          "enum": ["block", "passthrough_and_log"],
+          "default": "block"
+        }
+      }
+    },
+
+    "signature": {
+      "type": "object",
+      "description": "Cryptographic signature block. Provides integrity verification and chain of custody proof for the policy file.",
+      "required": ["algorithm", "key_id", "signed_at", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "description": "The signing algorithm used to create this signature.",
+          "enum": ["ed25519", "rsa-pss-sha256", "ecdsa-p256-sha256"]
+        },
+        "key_id": {
+          "type": "string",
+          "description": "The runtime keyring key ID used to look up the verification public key. This is a lookup key, not the public key itself.",
+          "minLength": 1,
+          "maxLength": 128,
+          "examples": ["compliance-team-2026", "platform-signing-key-v3"]
+        },
+        "signed_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp recording when this signature was created. Part of the signed content.",
+          "format": "date-time",
+          "examples": ["2026-07-01T09:00:00Z"]
+        },
+        "value": {
+          "type": "string",
+          "description": "Base64url-encoded signature bytes. Computed over the canonical JSON form of the policy content with the signature field removed, per RFC 8785.",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, the runtime MUST verify the signature and MUST refuse to load the policy if verification fails. When false, verification is attempted if the block is present but failure only produces a warning.",
+          "default": false
+        }
+      }
+    },
+
+    "policy_test": {
+      "type": "object",
+      "description": "An inline unit test for this policy. Executed by 'transparentguard test'. Does not make real LLM calls.",
+      "required": ["id", "stage", "input", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this test within the tests list.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Plain-text description of what this test is checking and why. Treat as documentation for auditors.",
+          "maxLength": 512
+        },
+        "stage": {
+          "type": "string",
+          "description": "The stage at which this test's input is presented to the runtime.",
+          "enum": ["pre-request", "post-response", "tool-call"]
+        },
+        "input": {
+          "type": "object",
+          "description": "The synthetic input to present to the runtime. Structure depends on stage.",
+          "properties": {
+            "messages": {
+              "type": "array",
+              "description": "For pre-request and post-response tests. The message list to present.",
+              "items": {
+                "type": "object",
+                "required": ["role", "content"],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": ["system", "user", "assistant", "tool"]
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "response": {
+              "type": "object",
+              "description": "For post-response tests. The synthetic model response to evaluate.",
+              "required": ["content"],
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "finish_reason": {
+                  "type": "string",
+                  "enum": ["stop", "length", "tool_calls", "content_filter"]
+                }
+              }
+            },
+            "tool_call": {
+              "type": "object",
+              "description": "For tool-call tests. The synthetic tool call intent to evaluate.",
+              "required": ["tool_name"],
+              "properties": {
+                "tool_name": {
+                  "type": "string"
+                },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            },
+            "provider": {
+              "type": "string",
+              "description": "The provider identifier to simulate for this test.",
+              "examples": ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"]
+            },
+            "model_parameters": {
+              "type": "object",
+              "description": "Simulated model call parameters.",
+              "additionalProperties": true
+            }
+          }
+        },
+        "expect": {
+          "type": "object",
+          "description": "The expected evaluation result. The test passes only when all declared expectations are met.",
+          "required": ["outcome"],
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "description": "The expected overall evaluation outcome.",
+              "enum": ["allowed", "allowed_with_modifications", "blocked", "warned"]
+            },
+            "rules_triggered": {
+              "type": "array",
+              "description": "Rules that MUST have triggered a violation for this test to pass.",
+              "items": {
+                "type": "object",
+                "required": ["rule_id"],
+                "additionalProperties": false,
+                "properties": {
+                  "rule_id": {
+                    "type": "string",
+                    "description": "The rule that must have triggered."
+                  },
+                  "action_taken": {
+                    "type": "string",
+                    "description": "The specific action that must have been taken.",
+                    "enum": ["redacted", "blocked", "warned", "logged"]
+                  },
+                  "min_violations": {
+                    "type": "integer",
+                    "description": "Minimum number of violation spans that must have been found.",
+                    "minimum": 1,
+                    "default": 1
+                  }
+                }
+              }
+            },
+            "rules_not_triggered": {
+              "type": "array",
+              "description": "Rule IDs that MUST NOT have triggered a violation. Use to verify rules do not produce false positives on known-good content.",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "redactions": {
+              "type": "array",
+              "description": "Specific redactions that must appear in the modified output.",
+              "items": {
+                "type": "object",
+                "required": ["category"],
+                "additionalProperties": false,
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "description": "The PII category that must have been redacted."
+                  },
+                  "count": {
+                    "type": "integer",
+                    "description": "The exact number of instances of this category that must have been redacted.",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "threshold": {
+      "type": "object",
+      "description": "A single breach detection threshold. Watches one rule's violations within a rolling time window and fires an action when the count is crossed.",
+      "required": ["id", "rule_id", "violation_type", "count", "window", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this threshold within the thresholds list.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Plain-text explanation of what this threshold is monitoring and why. Include the regulatory obligation it supports.",
+          "maxLength": 512
+        },
+        "rule_id": {
+          "type": "string",
+          "description": "The ID of the rule whose violations this threshold monitors. Must reference a rule in the rules list or a framework rule prefixed with tg_framework_.",
+          "minLength": 1
+        },
+        "violation_type": {
+          "type": "string",
+          "description": "The outcome type from the target rule that increments this threshold's counter.",
+          "enum": ["blocked", "redacted", "warned", "error", "sampled_out"]
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of qualifying violations within the window that triggers the threshold action. Counter resets after firing. Use count: 1 for rules where a single violation is itself a reportable breach.",
+          "minimum": 1
+        },
+        "window": {
+          "type": "string",
+          "description": "The rolling time window over which violations are counted. Format: integer followed immediately by a unit suffix (m=minutes, h=hours, d=days). Examples: 15m, 1h, 24h, 7d. The window is rolling not fixed: it always reflects the most recent N units from the current moment.",
+          "pattern": "^[1-9][0-9]*[mhd]$",
+          "examples": ["15m", "1h", "4h", "24h", "7d"]
+        },
+        "action": {
+          "type": "string",
+          "description": "Action to take when the threshold is crossed. notify: POST a formatted payload to notify_url asynchronously without affecting call evaluation. block_all: immediately suspend all LLM call processing until cleared by an operator. escalate: tag subsequent calls with tg_incident_active: true for downstream rule and monitoring reaction.",
+          "enum": ["notify", "block_all", "escalate"]
+        },
+        "notify_url": {
+          "type": "string",
+          "description": "HTTPS URL to POST the breach notification payload to. Required when action is notify. The http:// scheme is not permitted.",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "payload_template": {
+          "type": "string",
+          "description": "Regulation-formatted notification payload template. Produces a notification body pre-populated with all fields required by the relevant regulatory reporting format.",
+          "oneOf": [
+            {
+              "enum": [
+                "hipaa-breach-v1",
+                "gdpr-article-33",
+                "eu-ai-act-article-73",
+                "soc2-incident-v1"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^custom/[a-zA-Z][a-zA-Z0-9_-]*$",
+              "description": "Custom template identifier in the form custom/{identifier}."
+            }
+          ]
+        },
+        "block_message": {
+          "type": "string",
+          "description": "Human-readable message returned to applications when calls are blocked due to an active incident. Required when action is block_all.",
+          "maxLength": 512
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "When false, the threshold is parsed and validated but never evaluated.",
+          "default": true
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Arbitrary key-value pairs. Use for regulatory citations, notification deadlines, DPO contact info, and escalation paths. All values are included in threshold_triggered audit events.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" }
+            ]
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "action": { "const": "notify" } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["notify_url"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "action": { "const": "block_all" } },
+            "required": ["action"]
+          },
+          "then": {
+            "required": ["block_message"]
+          }
+        }
+      ]
+    },
+
+    "audit_chain_integrity": {
+      "type": "object",
+      "description": "Tamper-evident audit log chaining configuration. When enabled, every audit event includes a previous_event_hash field (SHA-256 or SHA3-256 of the previous event canonical JSON per RFC 8785) and a chain_sequence integer. Together these create an unbreakable chain: any deletion, insertion, or modification of an event causes the chain to break at that position and is mathematically detectable. Required for HIPAA 45 CFR 164.312(b) audit integrity, GDPR Article 32 technical integrity measures, EU AI Act Article 12 reliable log requirements, and SOC 2 CC7.2 monitoring controls.",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, previous_event_hash and chain_sequence are included in every audit event and the sidecar is maintained."
+        },
+        "algorithm": {
+          "type": "string",
+          "description": "Hash algorithm for computing previous_event_hash. sha256 is the default and satisfies all current regulatory requirements. sha3-256 is available for organizations whose security policy mandates SHA-3.",
+          "enum": ["sha256", "sha3-256"],
+          "default": "sha256"
+        },
+        "sidecar_path": {
+          "type": "string",
+          "description": "Absolute or relative local path for the chain sidecar file. The sidecar preserves chain head state (root nonce, last hash, last sequence number) across log rotation and process restarts, enabling cross-file chain continuity. Strongly recommended in all production environments. Written atomically using write-then-rename to prevent corruption.",
+          "minLength": 1,
+          "examples": ["/var/tg/chain-head.json", "./logs/tg-chain-head.json"]
+        },
+        "verify_on_startup": {
+          "type": "boolean",
+          "description": "When true, the runtime reads the audit destination at startup, verifies every event in the chain from the root nonce to the current head, and reports the result before accepting any new calls. In strict environments a detected break prevents startup. In non-strict environments the break is logged and startup proceeds with a warning.",
+          "default": false
+        },
+        "alert_on_break": {
+          "type": "boolean",
+          "description": "When true, a detected chain break during verification triggers an alert to all configured audit.notify targets with event type chain_break and halts evaluation. When false, the break is logged to standard error only and evaluation continues.",
+          "default": true
+        }
+      }
+    }
+
+  }
+}

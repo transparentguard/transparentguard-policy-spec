@@ -1,0 +1,245 @@
+###############################################################################
+# TransparentGuard Policy Spec v1.0
+# Example: EU GDPR
+#
+# A policy for AI applications that process personal data of EU residents
+# and must comply with the General Data Protection Regulation (GDPR).
+#
+# Regulatory basis:
+#   GDPR Regulation (EU) 2016/679
+#   Article 5:  Principles relating to processing of personal data
+#   Article 25: Data protection by design and by default
+#   Article 32: Security of processing
+#   Article 35: Data protection impact assessment
+#
+# Requirements before using this policy in production:
+#   1. Execute a Data Processing Agreement (DPA) with all LLM providers
+#      listed in the provider allowlist.
+#   2. Confirm that all providers in the allowlist are located in the EU or
+#      have adequacy decisions or Standard Contractual Clauses in place.
+#   3. Document the legal basis for processing under Article 6 in the
+#      policy description and your Records of Processing Activities (RoPA).
+#   4. Have this policy reviewed by your Data Protection Officer (DPO)
+#      before first production deployment if you process special category
+#      data under Article 9.
+#
+# Data processing legal basis (document yours here):
+#   Legal basis: Article 6(1)(b) - Processing necessary for contract performance
+#   Special categories: None processed by this deployment
+#   DPO reviewed: Yes, 2026-06-15
+###############################################################################
+
+tps_version: "1.0"
+name: "gdpr-eu-production"
+description: "GDPR-compliant policy for AI applications processing EU resident personal data. Enforces EU PII redaction, data residency constraints, and purpose limitation. Legal basis: Article 6(1)(b) contract performance. No special category data in scope. DPO reviewed 2026-06-15."
+
+provider:
+  - openai/gpt-4o
+  - openai/gpt-4o-mini
+  - anthropic/claude-3.5-sonnet
+
+environments:
+  - name: production
+    strict: true
+  - name: staging
+    strict: true
+    disabled_rules:
+      - enforce-rate-limit
+  - name: dev
+    strict: false
+    disabled_rules:
+      - enforce-data-residency
+      - enforce-provider-allowlist
+      - enforce-rate-limit
+
+compliance_frameworks:
+  - gdpr
+
+rules:
+
+  ###############################################################################
+  # ACCESS AND PROVIDER CONTROLS
+  ###############################################################################
+
+  - id: enforce-provider-allowlist
+    description: "Restricts calls to providers with executed DPAs. Under GDPR Article 28, processors must be bound by a contract guaranteeing sufficient data protection measures."
+    stage: pre-request
+    action: enforce
+    enforce_type: provider_allowlist
+    allowed_providers:
+      - openai/gpt-4o
+      - openai/gpt-4o-mini
+      - anthropic/claude-3.5-sonnet
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "GDPR Article 28 - Processor Contracts"
+      dpa_status: "Executed with OpenAI (2026-01-10) and Anthropic (2026-02-01)"
+
+  - id: enforce-data-residency
+    description: "Restricts LLM calls to EU-located provider regions. Ensures personal data does not leave the EU without an appropriate transfer mechanism in place. Required when there is no adequacy decision covering the destination country."
+    stage: pre-request
+    action: enforce
+    enforce_type: data_residency
+    allowed_regions:
+      - eu-west-1
+      - eu-west-2
+      - eu-west-3
+      - eu-central-1
+      - eu-central-2
+      - eu-north-1
+      - eu-south-1
+      - eu-south-2
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "GDPR Chapter V - Transfers to Third Countries"
+
+  - id: enforce-rate-limit
+    description: "Enforces per-key rate limits. Unusually high request volumes may indicate unauthorized bulk processing that would require a separate Data Protection Impact Assessment."
+    stage: pre-request
+    action: enforce
+    enforce_type: rate_limit
+    max_requests_per_minute_per_key: 60
+    max_requests_per_hour_per_key: 1000
+    on_violation: block
+    log: true
+
+  ###############################################################################
+  # OUTBOUND PERSONAL DATA CONTROLS (pre-request)
+  ###############################################################################
+
+  - id: redact-eu-pii-outbound
+    description: "Redacts EU personal data categories from outbound prompts. Applies data minimisation (Article 5(1)(c)) by removing personal data that is not necessary for the AI task. Covers both standard personal data and special category data under Article 9."
+    stage: pre-request
+    action: redact
+    targets:
+      - type: pii
+        categories:
+          - name
+          - email
+          - phone
+          - address
+          - ip_address
+          - national_id
+          - tax_id
+          - passport
+          - driver_license
+          - credit_card
+          - bank_account
+          - iban
+          - race
+          - religion
+          - political_opinion
+          - sexual_orientation
+          - biometric
+          - genetic
+          - union_membership
+          - health_condition
+        confidence_threshold: 0.78
+    on_violation: redact
+    log: true
+    metadata:
+      regulatory_ref: "GDPR Article 5(1)(c) - Data Minimisation; Article 9 - Special Categories"
+      reviewed_by: "DPO"
+      review_date: "2026-06-15"
+
+  - id: block-prompt-injection
+    description: "Blocks prompt injection attempts. A successful injection could override data minimisation behavior or cause the model to process personal data in ways not covered by the declared legal basis."
+    stage: pre-request
+    action: classify
+    classifier: built-in/prompt-injection-v2
+    threshold: 0.80
+    on_violation: block
+    log: true
+
+  - id: tag-gdpr-context
+    description: "Tags every request with GDPR processing context. The legal basis and purpose tags appear in audit events, supporting demonstration of compliance per Article 5(2) accountability principle."
+    stage: pre-request
+    action: tag
+    tags:
+      tg_policy: "gdpr-eu-production"
+      tg_compliance_scope: "gdpr"
+      tg_legal_basis: "article-6-1-b-contract"
+      tg_data_residency: "eu-only"
+      tg_special_categories_in_scope: "false"
+
+  ###############################################################################
+  # INBOUND PERSONAL DATA CONTROLS (post-response)
+  ###############################################################################
+
+  - id: redact-eu-pii-inbound
+    description: "Redacts EU personal data from LLM responses. Prevents model hallucinations or accidental memorization from surfacing personal data of EU residents in application output."
+    stage: post-response
+    action: redact
+    targets:
+      - type: pii
+        categories:
+          - name
+          - email
+          - phone
+          - national_id
+          - credit_card
+          - race
+          - religion
+          - political_opinion
+          - sexual_orientation
+          - health_condition
+        confidence_threshold: 0.82
+    on_violation: redact
+    log: true
+    metadata:
+      regulatory_ref: "GDPR Article 5(1)(f) - Integrity and Confidentiality"
+
+  - id: block-toxic-output
+    description: "Blocks toxic, abusive, or discriminatory responses. Under GDPR, profiling or automated decision-making that produces discriminatory output may constitute unlawful processing."
+    stage: post-response
+    action: classify
+    classifier: built-in/toxicity-v1
+    threshold: 0.82
+    on_violation: block
+    log: true
+
+  - id: block-hate-speech-output
+    description: "Blocks hate speech output. Output that discriminates based on protected characteristics (race, religion, sexual orientation, etc.) may engage Article 9 liability where those characteristics are implicated."
+    stage: post-response
+    action: classify
+    classifier: built-in/hate-speech-v1
+    threshold: 0.78
+    on_violation: block
+    log: true
+
+  - id: protect-system-prompt
+    description: "Detects and blocks system prompt leakage. System prompts may contain personal data or configuration that constitutes personal data of internal users."
+    stage: post-response
+    action: enforce
+    enforce_type: confidentiality
+    protected_content_ref: system_prompt
+    similarity_threshold: 0.83
+    on_violation: block
+    log: true
+
+  - id: log-all-completions
+    description: "Records an audit event for every completion. Supports the accountability obligation under Article 5(2) by maintaining a record of all AI processing activity involving personal data."
+    stage: post-response
+    action: log
+    log_level: info
+    metadata:
+      regulatory_ref: "GDPR Article 5(2) - Accountability"
+
+audit:
+  enabled: true
+  destination: "s3://your-gdpr-audit-bucket/tg-logs/"
+  format: ndjson
+  retention_days: 1095
+  include_redacted_content: false
+  include_full_request: false
+  include_full_response: false
+  events:
+    - allowed
+    - blocked
+    - redacted
+    - warned
+    - error
+  batch_size: 50
+  flush_interval_ms: 3000
