@@ -1,0 +1,221 @@
+###############################################################################
+# TransparentGuard Policy Spec v1.0
+# Example: EU AI Act - High-Risk System
+#
+# A policy for AI systems classified as "high-risk" under Annex III of the
+# EU Artificial Intelligence Act (EU) 2024/1689.
+#
+# Regulatory basis:
+#   EU AI Act (EU) 2024/1689
+#   Article 9:   Risk management system
+#   Article 10:  Data and data governance
+#   Article 12:  Record-keeping
+#   Article 13:  Transparency and provision of information to deployers
+#   Article 14:  Human oversight
+#   Article 16:  Obligations of providers of high-risk AI systems
+#   Annex III:   High-risk AI system categories
+#
+# High-risk categories covered by this example:
+#   Annex III, 1(a): Biometric identification (if applicable)
+#   Annex III, 4(a): Employment and workers management
+#   Annex III, 5(a): Access to essential private services
+#   Annex III, 6(a): Administration of justice
+#
+# Requirements before using this policy in production:
+#   1. Complete a conformity assessment per Article 43 before deployment.
+#   2. Register the system in the EU database per Article 49 if required.
+#   3. Appoint a qualified person responsible for compliance per Article 26.
+#   4. Establish a post-market monitoring system per Article 72.
+#   5. This policy satisfies the technical record-keeping requirement of
+#      Article 12 and supports the human oversight requirement of Article 14.
+#      It does not substitute for a complete conformity assessment.
+###############################################################################
+
+tps_version: "1.0"
+name: "eu-ai-act-high-risk"
+description: "EU AI Act compliant policy for high-risk AI systems under Annex III. Enforces risk classification tagging, enhanced logging for human oversight per Article 14, and blocks unacceptable-risk outputs. Supports conformity assessment documentation per Articles 9 and 12."
+
+provider:
+  - openai/gpt-4o
+  - anthropic/claude-3.5-sonnet
+
+environments:
+  - name: production
+    strict: true
+  - name: conformity-assessment
+    strict: true
+    active_rules:
+      - classify-risk-level
+      - tag-high-risk-context
+      - enforce-human-oversight-log
+      - block-unacceptable-output
+      - log-all-decisions
+  - name: dev
+    strict: false
+    disabled_rules:
+      - enforce-provider-allowlist
+
+compliance_frameworks:
+  - eu-ai-act
+  - gdpr
+
+rules:
+
+  ###############################################################################
+  # PROVIDER CONTROLS
+  ###############################################################################
+
+  - id: enforce-provider-allowlist
+    description: "Restricts calls to approved providers with Data Processing Agreements and EU data residency guarantees. High-risk AI systems must maintain documented control over the entire AI supply chain."
+    stage: pre-request
+    action: enforce
+    enforce_type: provider_allowlist
+    allowed_providers:
+      - openai/gpt-4o
+      - anthropic/claude-3.5-sonnet
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 25 - Obligations of Distributors"
+
+  ###############################################################################
+  # RISK CLASSIFICATION AND TAGGING (pre-request)
+  ###############################################################################
+
+  - id: classify-risk-level
+    description: "Tags every request with the declared EU AI Act risk classification for this deployment. Classification is set at the system level per the conformity assessment. Individual requests inherit the system risk level."
+    stage: pre-request
+    action: tag
+    tags:
+      tg_eu_ai_act_risk_class: "high"
+      tg_eu_ai_act_annex_iii_category: "5a"
+      tg_conformity_assessment_id: "CA-2026-001"
+      tg_registration_id: "EU-AI-DB-2026-XXXXX"
+
+  - id: tag-high-risk-context
+    description: "Attaches human oversight metadata to every high-risk system request. Per Article 14, high-risk AI systems must enable human oversight. This tag confirms that the deployer's human oversight mechanism is active."
+    stage: pre-request
+    action: tag
+    tags:
+      tg_human_oversight_active: "true"
+      tg_oversight_mechanism: "human-review-queue"
+      tg_policy: "eu-ai-act-high-risk"
+      tg_compliance_scope: "eu-ai-act"
+
+  - id: redact-eu-pii-outbound
+    description: "Redacts EU personal data from outbound prompts. High-risk AI systems processing personal data are subject to both the EU AI Act and GDPR data minimisation requirements simultaneously."
+    stage: pre-request
+    action: redact
+    targets:
+      - type: pii
+        categories:
+          - name
+          - email
+          - national_id
+          - race
+          - religion
+          - political_opinion
+          - sexual_orientation
+          - biometric
+          - health_condition
+        confidence_threshold: 0.75
+    on_violation: redact
+    log: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 10(5); GDPR Article 5(1)(c)"
+
+  - id: block-prompt-injection
+    description: "Blocks prompt injection in high-risk systems. A successful injection attack on a high-risk AI system (employment decisions, credit scoring, judicial support) could produce discriminatory or harmful automated decisions with significant real-world impact."
+    stage: pre-request
+    action: classify
+    classifier: built-in/prompt-injection-v2
+    threshold: 0.72
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 9 - Risk Management System"
+      risk_level: "critical"
+
+  ###############################################################################
+  # HUMAN OVERSIGHT LOGGING (pre-request)
+  ###############################################################################
+
+  - id: enforce-human-oversight-log
+    description: "Enforces enhanced logging for human oversight. Article 14 requires high-risk AI systems to be designed so that natural persons can effectively oversee them during use. This rule ensures every decision-relevant call is logged with sufficient context for a human reviewer."
+    stage: pre-request
+    action: log
+    log_level: info
+    metadata:
+      regulatory_ref: "EU AI Act Article 14 - Human Oversight"
+      oversight_log: "true"
+      log_purpose: "Human oversight evidence per Article 14(4)"
+
+  ###############################################################################
+  # OUTPUT CONTROLS (post-response)
+  ###############################################################################
+
+  - id: block-unacceptable-output
+    description: "Blocks outputs classified as unacceptable risk under Annex III prohibited practices. Covers outputs that manipulate individuals through subliminal techniques, exploit vulnerabilities of specific groups, or constitute prohibited social scoring."
+    stage: post-response
+    action: classify
+    classifier: built-in/toxicity-v1
+    threshold: 0.75
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 5 - Prohibited AI Practices"
+
+  - id: block-discriminatory-output
+    description: "Blocks outputs that contain discriminatory content based on protected characteristics. High-risk AI systems used in employment, credit, or judicial contexts must not produce biased outputs that would constitute unlawful discrimination."
+    stage: post-response
+    action: classify
+    classifier: built-in/hate-speech-v1
+    threshold: 0.72
+    on_violation: block
+    log: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 10(5) - Data Bias Prevention"
+
+  - id: redact-eu-pii-inbound
+    description: "Redacts EU personal data from responses before they reach the application."
+    stage: post-response
+    action: redact
+    targets:
+      - type: pii
+        categories:
+          - name
+          - national_id
+          - race
+          - religion
+          - political_opinion
+          - sexual_orientation
+          - health_condition
+        confidence_threshold: 0.80
+    on_violation: redact
+    log: true
+
+  - id: log-all-decisions
+    description: "Records a structured audit event for every AI system output. Article 12 requires high-risk AI systems to automatically generate logs enabling post-deployment monitoring and national authority investigation. This rule ensures complete decision logging."
+    stage: post-response
+    action: log
+    log_level: info
+    metadata:
+      regulatory_ref: "EU AI Act Article 12 - Record-Keeping"
+      log_purpose: "Post-market monitoring and competent authority access per Article 12(1)"
+
+audit:
+  enabled: true
+  destination: "s3://your-eu-ai-act-audit-bucket/tg-logs/"
+  format: ndjson
+  retention_days: 3650
+  include_redacted_content: false
+  include_full_request: false
+  include_full_response: false
+  events:
+    - allowed
+    - blocked
+    - redacted
+    - warned
+    - error
+  batch_size: 10
+  flush_interval_ms: 1000

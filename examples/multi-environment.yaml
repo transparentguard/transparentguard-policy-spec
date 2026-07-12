@@ -1,0 +1,166 @@
+###############################################################################
+# TransparentGuard Policy Spec v1.0
+# Example: Multi-Environment
+#
+# A single policy file covering three environments: dev, staging, and
+# production, with different rule sets active in each.
+#
+# Dev:     Minimal rules. Most blocking rules disabled. Ideal for local
+#          development where strict enforcement would block test prompts.
+#
+# Staging: Full rule set active but with warn-only on_violation for most
+#          rules. Lets the team see what would be blocked in production
+#          without breaking integration test pipelines.
+#
+# Production: Full rule set. All rules enforced at maximum strictness.
+#
+# Usage:
+#   Set the TG_ENV environment variable to activate the appropriate rules:
+#
+#   TG_ENV=dev npx transparentguard proxy --policy ./policies/multi-env.yaml
+#   TG_ENV=staging npx transparentguard proxy --policy ./policies/multi-env.yaml
+#   TG_ENV=production npx transparentguard proxy --policy ./policies/multi-env.yaml
+###############################################################################
+
+tps_version: "1.0"
+name: "multi-environment"
+description: "A single policy file covering dev, staging, and production environments with progressive enforcement. Dev has minimal blocking. Staging enforces and logs but uses warn for most rules. Production enforces at full strictness."
+
+provider: any
+
+environments:
+
+  - name: production
+    strict: true
+
+  - name: staging
+    strict: false
+    disabled_rules:
+      - enforce-token-budget
+
+  - name: dev
+    strict: false
+    active_rules:
+      - redact-pii-outbound
+      - log-all-requests
+      - tag-environment
+
+rules:
+
+  ###############################################################################
+  # RULES ACTIVE IN ALL ENVIRONMENTS (unless overridden above)
+  ###############################################################################
+
+  - id: redact-pii-outbound
+    description: "Redacts standard PII from outbound prompts. Active in all environments including dev to train developers to avoid hardcoding personal data in test prompts."
+    stage: pre-request
+    action: redact
+    targets:
+      - type: pii
+        categories: [email, phone, ssn, credit_card]
+        confidence_threshold: 0.80
+    on_violation: redact
+    log: true
+
+  - id: tag-environment
+    description: "Tags every request with the active environment name."
+    stage: pre-request
+    action: tag
+    tags:
+      tg_environment: "${TG_ENV}"
+      tg_policy: "multi-environment"
+
+  - id: log-all-requests
+    description: "Logs every request regardless of violations."
+    stage: pre-request
+    action: log
+    log_level: info
+
+  ###############################################################################
+  # RULES ACTIVE IN STAGING AND PRODUCTION (dev disables these via active_rules)
+  ###############################################################################
+
+  - id: block-prompt-injection
+    description: "Blocks prompt injection. In staging, this logs violations for review. In production, it hard-blocks."
+    stage: pre-request
+    action: classify
+    classifier: built-in/prompt-injection-v2
+    threshold: 0.80
+    on_violation: block
+    log: true
+
+  - id: enforce-provider-allowlist
+    description: "Restricts calls to approved providers."
+    stage: pre-request
+    action: enforce
+    enforce_type: provider_allowlist
+    allowed_providers:
+      - openai/gpt-4o
+      - openai/gpt-4o-mini
+      - anthropic/claude-3.5-sonnet
+      - anthropic/claude-3-haiku
+    on_violation: block
+    log: true
+
+  - id: enforce-token-budget
+    description: "Enforces token budget. Disabled in staging to avoid breaking long-running integration tests."
+    stage: pre-request
+    action: enforce
+    enforce_type: token_budget
+    max_tokens_per_request: 8192
+    max_tokens_per_day_per_key: 1000000
+    on_violation: block
+    log: true
+
+  - id: redact-pii-inbound
+    description: "Redacts PII from inbound responses."
+    stage: post-response
+    action: redact
+    targets:
+      - type: pii
+        categories: [email, phone, ssn, credit_card]
+        confidence_threshold: 0.82
+    on_violation: redact
+    log: true
+
+  - id: block-toxic-output
+    description: "Blocks toxic responses."
+    stage: post-response
+    action: classify
+    classifier: built-in/toxicity-v1
+    threshold: 0.85
+    on_violation: block
+    log: true
+
+  - id: protect-system-prompt
+    description: "Blocks responses that appear to leak system prompt content."
+    stage: post-response
+    action: enforce
+    enforce_type: confidentiality
+    protected_content_ref: system_prompt
+    similarity_threshold: 0.85
+    on_violation: block
+    log: true
+
+  - id: log-all-responses
+    description: "Records an audit event for every response."
+    stage: post-response
+    action: log
+    log_level: info
+
+audit:
+  enabled: true
+  destination: "stdout://"
+  format: ndjson
+  retention_days: 365
+  include_redacted_content: false
+  include_full_request: false
+  include_full_response: false
+  events:
+    - allowed
+    - blocked
+    - redacted
+    - warned
+    - error
+  batch_size: 1
+  flush_interval_ms: 500
