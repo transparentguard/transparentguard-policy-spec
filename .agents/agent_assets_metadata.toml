@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "Sfy3zsmnkQSBwRPKanUVj"
-uri = "file://screenshots/transparentee-laptop.jpg"
-type = "image"
-title = "transparentee"
