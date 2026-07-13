@@ -1,0 +1,184 @@
+# =============================================================================
+# TransparentGuard Proxy — Helm values
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Image
+# ---------------------------------------------------------------------------
+image:
+  repository: ghcr.io/transparentguard/proxy
+  tag: ""          # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+policy:
+  # Load from an OCI artifact reference (recommended for production):
+  #   ociRef: "oci://ghcr.io/myorg/my-policy:v1.0.0"
+  # Or embed the policy YAML inline:
+  #   content: |
+  #     tps_version: "1.0"
+  #     name: production
+  #     ...
+  ociRef: ""
+  content: ""
+
+  # Cosign signature verification for OCI-loaded policies
+  cosign:
+    verify: false
+    # Path to PEM public key inside the container (mount via secret)
+    publicKeyPath: ""
+
+# ---------------------------------------------------------------------------
+# Upstream LLM provider
+# ---------------------------------------------------------------------------
+upstream:
+  # Base URL of the upstream LLM API
+  url: "https://api.openai.com"
+  # Secret containing the upstream API key.
+  # The secret must have a key named "api-key".
+  apiKeySecret:
+    name: ""
+    key: "api-key"
+
+# ---------------------------------------------------------------------------
+# TransparentGuard license (paid-tier features)
+# ---------------------------------------------------------------------------
+tg:
+  apiKeySecret:
+    name: ""
+    key: "api-key"
+
+# ---------------------------------------------------------------------------
+# Deployment
+# ---------------------------------------------------------------------------
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# ---------------------------------------------------------------------------
+# Autoscaling (HPA)
+# ---------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: proxy.transparentguard.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: tg-proxy-tls
+  #   hosts:
+  #     - proxy.transparentguard.example.com
+
+# ---------------------------------------------------------------------------
+# OpenTelemetry
+# ---------------------------------------------------------------------------
+otel:
+  # Set to your OTEL collector endpoint to enable tracing + metrics
+  # e.g. http://otel-collector.monitoring.svc.cluster.local:4318
+  endpoint: ""
+  serviceName: "transparentguard-proxy"
+  # Additional OTLP headers (e.g. for Grafana Cloud, Honeycomb, Datadog)
+  # Format: "key1=value1,key2=value2"
+  headers: ""
+
+# ---------------------------------------------------------------------------
+# Pod configuration
+# ---------------------------------------------------------------------------
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port:   "8080"
+  prometheus.io/path:   "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ---------------------------------------------------------------------------
+# Readiness / liveness probes
+# ---------------------------------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ---------------------------------------------------------------------------
+# Topology spread (production HA)
+# ---------------------------------------------------------------------------
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: transparentguard-proxy
+
+# ---------------------------------------------------------------------------
+# Extra environment variables
+# ---------------------------------------------------------------------------
+extraEnv: []
+# - name: MY_VAR
+#   value: "my-value"
+
+extraEnvFrom: []
+# - secretRef:
+#     name: my-secret

@@ -1,0 +1,156 @@
+name: Sign & Attest Container Image
+
+on:
+  workflow_run:
+    workflows: ["Release — Build, Attest, and Publish"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: "Full image digest to sign (ghcr.io/transparentguard/proxy@sha256:...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write      # Required for keyless Sigstore/Cosign OIDC signing
+  packages: write      # Required to push signature to GHCR
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/transparentguard/proxy
+
+jobs:
+  sign:
+    name: Sign container image with Cosign (keyless)
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    outputs:
+      image_digest: ${{ steps.resolve.outputs.image_digest }}
+      signature_bundle: ${{ steps.sign.outputs.bundle }}
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: "v2.2.4"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---------------------------------------------------------------------------
+      # Resolve image digest — from dispatch input or from the triggering release
+      # ---------------------------------------------------------------------------
+      - name: Resolve image digest
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            DIGEST="${{ inputs.image_digest }}"
+          else
+            # Pull the latest digest for the image tagged with the release tag
+            TAG=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName 2>/dev/null || echo "latest")
+            DIGEST=$(docker buildx imagetools inspect "${{ env.IMAGE_NAME }}:${TAG}" \
+              --format '{{index .Manifest.Digest}}' 2>/dev/null || \
+              docker manifest inspect "${{ env.IMAGE_NAME }}:${TAG}" 2>/dev/null | \
+              python3 -c "import sys,json; m=json.load(sys.stdin); print(m.get('config',{}).get('digest',''))" || echo "")
+            if [[ -z "$DIGEST" ]]; then
+              echo "::error::Could not resolve image digest for ${{ env.IMAGE_NAME }}:${TAG}"
+              exit 1
+            fi
+          fi
+          echo "image_digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Signing: ${DIGEST}"
+
+      # ---------------------------------------------------------------------------
+      # Keyless signing — Cosign obtains OIDC token from GitHub Actions and signs
+      # against the Sigstore public-good transparency log (Rekor).
+      # The signature entry URL is printed and stored as a step output.
+      # ---------------------------------------------------------------------------
+      - name: Sign image with Cosign (keyless OIDC)
+        id: sign
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          IMAGE_REF="${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.image_digest }}"
+
+          cosign sign \
+            --yes \
+            --rekor-url https://rekor.sigstore.dev \
+            --fulcio-url https://fulcio.sigstore.dev \
+            --oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE_REF}"
+
+          echo "Signed: ${IMAGE_REF}"
+
+          # Fetch and store the Rekor transparency log entry URL
+          BUNDLE=$(cosign triangulate --type=signature "${IMAGE_REF}" 2>/dev/null || echo "")
+          echo "bundle=${BUNDLE}" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------------------
+      # Attach SBOM as a Cosign attestation so it travels with the image signature
+      # ---------------------------------------------------------------------------
+      - name: Download SBOM artifact (runtime)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: sbom-runtime
+          path: /tmp/sbom
+
+      - name: Attach SBOM attestation (if present)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          SBOM_PATH="/tmp/sbom/sbom-runtime.cdx.json"
+          if [[ -f "${SBOM_PATH}" ]]; then
+            IMAGE_REF="${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.image_digest }}"
+            cosign attest \
+              --yes \
+              --predicate "${SBOM_PATH}" \
+              --type cyclonedx \
+              "${IMAGE_REF}"
+            echo "SBOM attestation attached."
+          else
+            echo "No SBOM artifact found — skipping attestation."
+          fi
+
+      # ---------------------------------------------------------------------------
+      # Verify the signature immediately after signing to confirm end-to-end
+      # ---------------------------------------------------------------------------
+      - name: Verify signature
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          IMAGE_REF="${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.image_digest }}"
+          cosign verify \
+            --rekor-url https://rekor.sigstore.dev \
+            --certificate-identity-regexp "https://github.com/transparentguard/.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE_REF}" | jq '.[0] | {issuer: .optional.Issuer, subject: .optional.Subject, integrated_time: .integratedTime}'
+
+      - name: Summary
+        run: |
+          echo "## Cosign Signing Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.image_digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Signer | Keyless (Sigstore OIDC) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Transparency log | https://rekor.sigstore.dev |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Issuer | https://token.actions.githubusercontent.com |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Signature bundle | \`${{ steps.sign.outputs.bundle }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verify with:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+          echo "cosign verify \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-identity-regexp 'https://github.com/transparentguard/.*' \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  ${{ env.IMAGE_NAME }}@${{ steps.resolve.outputs.image_digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"

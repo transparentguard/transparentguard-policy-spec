@@ -1,0 +1,29 @@
+apiVersion: v2
+name: transparentguard-proxy
+description: TransparentGuard Proxy — OpenAI-compatible HTTP proxy with AI policy enforcement, OTEL tracing, and OCI-native policy distribution
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://transparentguard.com
+sources:
+  - https://github.com/transparentguard/proxy
+maintainers:
+  - name: TransparentGuard
+    email: engineering@transparentguard.com
+    url: https://transparentguard.com
+keywords:
+  - ai
+  - llm
+  - proxy
+  - policy
+  - compliance
+  - guardrails
+  - openai
+  - anthropic
+  - hipaa
+  - gdpr
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/signKey: |
+    fingerprint: keyless (Sigstore/Cosign)
+    url: https://github.com/transparentguard/proxy/actions
