@@ -7,6 +7,55 @@ This spec follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] — Runtime v0.3.1 enforcement tightening
+
+### Changed
+
+**License enforcement — fail-closed on API unreachability**
+- The runtime no longer silently downgrades to the free tier when the TransparentGuard license API is unreachable.
+- New behavior: if a valid license status was cached within the last hour (grace window), that status is used and a warning is logged. If no grace cache is available, the runtime throws `TransparentGuardError` with code `api_unreachable` rather than continuing as free.
+- This prevents the bypass vector where network-isolating the license server allowed indefinite free-tier operation.
+
+**Audit chain integrity — gated on `audit_chain_integrity` feature**
+- `audit.chain_integrity.enabled: true` in a TPS policy now requires the `audit_chain_integrity` license feature (Startup tier and above).
+- Free-tier callers with `chain_integrity` configured will see a warning logged and chain integrity will be silently disabled (fields `prev_event_hash` and `chain_sequence` will not be set on audit events).
+- Previously, chain integrity ran for any caller who configured it.
+
+**Threshold breach notifications — gated on `threshold_notifications` feature**
+- `action: notify` (outbound webhook) and `action: block_all` (system-wide suspension) in `thresholds` now require the `threshold_notifications` license feature (Startup tier and above).
+- Free-tier callers will see a per-trigger warning logged; the violation is still counted and the `threshold_triggered` audit event is still emitted, but the outbound action is suppressed.
+- `action: escalate` is unaffected — it only sets evaluation tags and produces no outbound I/O or system state changes, so it remains available on all tiers.
+- Previously, all threshold actions ran regardless of license tier.
+
+**Compliance framework templates — gated on `compliance_frameworks` feature**
+- `compliance_frameworks` in a TPS policy now requires the `compliance_frameworks` license feature (Startup tier and above).
+- Free-tier callers that declare `compliance_frameworks` will receive `TransparentGuardError` with code `feature_requires_paid_tier`.
+- Previously, all framework rule sets (HIPAA, GDPR, SOC 2, EU AI Act, FedRAMP) ran regardless of license tier.
+
+**Custom classifier registry — gated on `oem_embed` feature**
+- Resolving a classifier via `custom_classifiers` in a TPS policy or via `registerClassifier()` now requires the `oem_embed` license feature (OEM tier).
+- Previously, custom classifiers ran for any caller who configured them.
+
+**PIE shadow mode — gated on `pie` feature**
+- `pie.shadow_mode` in a TPS policy is silently disabled unless the `pie` license feature is present (Growth tier and above).
+- Non-throwing: shadow mode simply does not run rather than erroring, since it is a background observability feature.
+
+**Evaluation receipts — gated on `trust_chain` feature**
+- Signed ECDSA-P256 evaluation receipts are only generated when the `trust_chain` license feature is present (Enterprise tier and above).
+- Previously, receipts were generated unconditionally for all callers.
+
+### Added
+
+**New `LicenseFeature` values**
+- `"trust_chain"` — controls receipt generation and key rotation watcher access.
+- `"pie"` — controls PIE shadow mode and drift detection.
+- `"audit_chain_integrity"` — controls SHA-256/SHA3-256 Merkle chain on audit logs.
+- `"threshold_notifications"` — controls `action: notify` webhook delivery and `action: block_all` system suspension.
+
+**Threshold `action: escalate` remains free** — it only tags the evaluation context; no outbound I/O or system state change occurs.
+
+---
+
 ## [1.0.0] - 2026-07-12
 
 Initial stable release of the TransparentGuard Policy Spec.
