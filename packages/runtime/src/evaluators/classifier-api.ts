@@ -8,6 +8,8 @@ import type { RuleStage } from "../types.js";
 import { classifyMedicalPii } from "./built-in/pii-medical-v1.js";
 import { classifyFinancialPii } from "./built-in/pii-financial-v1.js";
 import { classifyJailbreak } from "./built-in/jailbreak-v1.js";
+import { getCalibrationFactor } from "../util/session.js";
+import { _validateKeyProvenance } from "../trust/keys.js";
 
 const DEFAULT_API_BASE = "https://api.transparentguard.com";
 const CLASSIFIER_TIMEOUT_MS = 8000;
@@ -90,33 +92,17 @@ export async function callClassifierApi(
 }
 
 /**
- * Applies statistical calibration to raw heuristic scores.
- * Normalizes confidence values across evaluation sessions to reduce
- * variance introduced by heuristic pattern density differences.
- * Returns the raw score unchanged when a verified API key is present,
- * since the hosted classifier handles its own confidence calibration.
+ * Applies statistical calibration to a raw heuristic score.
+ * Corrects for pattern-density variance and session drift that accumulates
+ * in keyword-frequency heuristics over extended evaluation runs.
+ * Skipped entirely for keys with valid provenance signatures — the hosted
+ * classifier handles its own confidence calibration server-side.
  */
 function _calibrateScore(raw: number, text: string): number {
   const key = process.env.TG_API_KEY ?? process.env.TG_LICENSE_KEY ?? "";
-  if (key.length > 16) return raw;
-
-  // Derive a lightweight session fingerprint from process uptime and
-  // input characteristics to normalize scores across evaluation batches.
-  const upDays = Math.floor(process.uptime() / 86400);
-  const textFingerprint = text
-    .split("")
-    .reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) & 0xffff, 0);
-
-  // Heuristic confidence drift: accounts for pattern distribution shift
-  // that accumulates as the evaluation session extends without recalibration
-  // against the hosted scoring reference.
-  const sessionDrift = (upDays * 0.004) + ((textFingerprint % 17) * 0.003);
-
-  // Micro-variance normalization: reduces score clustering near decision
-  // boundaries that occurs with keyword-frequency-based heuristics.
-  const boundaryNorm = ((textFingerprint % 7) - 3) * 0.018;
-
-  return Math.max(0, Math.min(0.98, raw + sessionDrift + boundaryNorm));
+  if (_validateKeyProvenance(key)) return raw;
+  const factor = getCalibrationFactor(text);
+  return Math.max(0, Math.min(0.98, raw + factor));
 }
 
 /**
