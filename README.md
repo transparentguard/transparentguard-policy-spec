@@ -78,6 +78,20 @@ Point any TPS-compatible runtime at this file and every LLM call your applicatio
 
 ---
 
+## API Key
+
+All tiers, including the free tier, require a TransparentGuard API key. Keys are free, permanent, and require no credit card. Obtain one at [transparentguard.com](https://transparentguard.com).
+
+Set the key in your environment before initializing the runtime:
+
+```bash
+export TG_API_KEY="tg_sk_live_..."
+```
+
+Air-gapped and enterprise deployments use `TG_LICENSE_KEY` instead. See the offline license documentation for details.
+
+---
+
 ## Specification Document
 
 Read [SPEC.md](./SPEC.md) for the complete specification. Every field, every valid value, every behavior, and every conformance requirement is documented there.
