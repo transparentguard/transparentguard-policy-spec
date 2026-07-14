@@ -267,9 +267,9 @@ const fadeUp = {
 // Pages
 // ---------------------------------------------------------------------------
 
-type Page = "hero" | "start" | "docs" | "enterprise" | "oem" | "company" | "research" | "startup" | "growth";
+type Page = "hero" | "start" | "docs" | "enterprise" | "oem" | "company" | "research";
 
-function HeroPage({ onStart, onDocs, onEnterprise, onOem, onCompany, onResearch, onStartup, onGrowth }: { onStart: () => void; onDocs: () => void; onEnterprise: () => void; onOem: () => void; onCompany: () => void; onResearch: () => void; onStartup: () => void; onGrowth: () => void }) {
+function HeroPage({ onStart, onDocs, onEnterprise, onOem, onCompany, onResearch }: { onStart: () => void; onDocs: () => void; onEnterprise: () => void; onOem: () => void; onCompany: () => void; onResearch: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <motion.div key="hero" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -669,9 +669,9 @@ const res = await client.chat
                   <li key={f} className="flex gap-2.5 items-start"><span className="shrink-0 mt-px">+</span>{f}</li>
                 ))}
               </ul>
-              <button onClick={onStartup} className="mt-8 border-2 border-foreground px-4 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-foreground hover:text-background transition-colors duration-200 focus:outline-none text-center w-full">
-                View Details
-              </button>
+              <a href="https://transparentguard.com" className="mt-8 border-2 border-foreground px-4 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-foreground hover:text-background transition-colors duration-200 focus:outline-none text-center block">
+                Get Started
+              </a>
             </div>
 
             {/* GROWTH — featured */}
@@ -689,9 +689,9 @@ const res = await client.chat
                   <li key={f} className="flex gap-2.5 items-start"><span className="shrink-0 mt-px">+</span>{f}</li>
                 ))}
               </ul>
-              <button onClick={onGrowth} className="mt-8 bg-background text-foreground px-4 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-background/90 transition-colors duration-200 focus:outline-none text-center w-full">
-                View Details
-              </button>
+              <a href="https://transparentguard.com" className="mt-8 bg-background text-foreground px-4 py-3 font-mono text-xs font-bold uppercase tracking-widest hover:bg-background/90 transition-colors duration-200 focus:outline-none text-center block">
+                Get Started
+              </a>
             </div>
 
             {/* ENTERPRISE */}
@@ -1558,246 +1558,6 @@ gh attestation verify runtime-dist.tar.gz \\
 }
 
 // ---------------------------------------------------------------------------
-// Startup page
-// ---------------------------------------------------------------------------
-
-function StartupPage({ onBack }: { onBack: () => void }) {
-  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, []);
-  return (
-    <motion.div key="startup" initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-screen flex flex-col p-6 md:p-12 lg:p-24 max-w-5xl mx-auto">
-
-      <header className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-6">
-        <div className="flex items-center gap-6">
-          <button onClick={onBack} className="flex items-center gap-2 font-mono text-sm uppercase tracking-wider text-foreground focus:outline-none">
-            <ArrowLeft size={15} /> Back
-          </button>
-          <span className="text-xl font-bold tracking-tight uppercase">TransparentGuard</span>
-        </div>
-        <div className="font-mono text-xs uppercase tracking-widest bg-foreground text-background px-4 py-2">Startup</div>
-      </header>
-
-      <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="mb-16">
-        <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter uppercase mb-3">Startup</h2>
-        <div className="font-mono text-sm text-foreground mb-1">$299/mo — 14-day free trial</div>
-        <div className="font-mono text-xs text-foreground/60 mb-5">No credit card required to start</div>
-        <div className="h-0.5 bg-foreground w-full mb-8" />
-        <p className="font-mono text-sm leading-relaxed max-w-2xl">
-          Your first enterprise deal will ask for a compliance report. Now you can hand one over.
-        </p>
-      </motion.div>
-
-      <div className="flex flex-col gap-5">
-
-        <motion.div custom={0.3} variants={fadeUp} initial="hidden" animate="show"
-          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}paintings/spring-garden.jpeg)`, backgroundSize: "cover", backgroundPosition: "center" }}
-          className="p-5 md:p-10">
-          <div className="bg-background p-6 md:p-8 flex flex-col gap-10">
-            {([
-              {
-                label: "Detection & Classification",
-                items: [
-                  "ML injection classifier: catches prompt injection attempts before they reach your model",
-                  "ML toxicity classifier: blocks harmful, abusive, and unsafe output in real time",
-                  "ML jailbreak classifier: detects five attack vector categories including persona hijacking, encoding attacks, and nested instruction injection",
-                  "All core guardrails from Free: PII detection across 18 categories, content filtering, and token budgets",
-                ],
-              },
-              {
-                label: "Compliance",
-                items: [
-                  "One compliance framework of your choice: HIPAA (45 CFR Part 164) or GDPR (EU 2016/679)",
-                  "JSON report export: hand your compliance team a real artifact, not a log dump",
-                  "Evidence package maps directly to framework controls, auditor-ready on day one",
-                  "Policy file lives in your repo: version-controlled, reviewable, and rollback-ready",
-                ],
-              },
-            ] as const).map(({ label, items }) => (
-              <section key={label}>
-                <SectionLabel>{label}</SectionLabel>
-                <ul className="flex flex-col gap-3">
-                  {items.map(item => (
-                    <li key={item} className="flex items-start gap-3 font-mono text-sm leading-relaxed">
-                      <span className="shrink-0 mt-px">+</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div custom={0.5} variants={fadeUp} initial="hidden" animate="show"
-          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}paintings/autumn-valley.jpeg)`, backgroundSize: "cover", backgroundPosition: "center" }}
-          className="p-5 md:p-10">
-          <div className="bg-background p-6 md:p-8 flex flex-col gap-10">
-            {([
-              {
-                label: "Hosting & Infrastructure",
-                items: [
-                  "Hosted managed endpoint: no Kubernetes, no Terraform, no self-hosting required",
-                  "Your policy file is the only thing you manage; we handle the runtime and uptime",
-                  "Proxy supports OpenAI and Anthropic out of the box",
-                  "Self-hosting still available if your team prefers it",
-                ],
-              },
-              {
-                label: "Support",
-                items: [
-                  "Slack and email support included",
-                  "48-hour response SLA on all support requests",
-                  "Full access to TPS documentation, SDK references, and CLI guides",
-                ],
-              },
-            ] as const).map(({ label, items }) => (
-              <section key={label}>
-                <SectionLabel>{label}</SectionLabel>
-                <ul className="flex flex-col gap-3">
-                  {items.map(item => (
-                    <li key={item} className="flex items-start gap-3 font-mono text-sm leading-relaxed">
-                      <span className="shrink-0 mt-px">+</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </motion.div>
-
-      </div>
-
-      <div className="border-t-2 border-foreground mt-16 pt-10">
-        <a href="https://transparentguard.com"
-          className="inline-flex items-center gap-4 bg-foreground text-background px-10 py-5 text-lg font-bold uppercase tracking-widest font-mono hover:bg-foreground/90 transition-colors duration-200 focus:outline-none">
-          Start Free Trial <ExternalLink size={20} strokeWidth={2.5} />
-        </a>
-      </div>
-    </motion.div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Growth page
-// ---------------------------------------------------------------------------
-
-function GrowthPage({ onBack }: { onBack: () => void }) {
-  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, []);
-  return (
-    <motion.div key="growth" initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-screen flex flex-col p-6 md:p-12 lg:p-24 max-w-5xl mx-auto">
-
-      <header className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-6">
-        <div className="flex items-center gap-6">
-          <button onClick={onBack} className="flex items-center gap-2 font-mono text-sm uppercase tracking-wider text-foreground focus:outline-none">
-            <ArrowLeft size={15} /> Back
-          </button>
-          <span className="text-xl font-bold tracking-tight uppercase">TransparentGuard</span>
-        </div>
-        <div className="font-mono text-xs uppercase tracking-widest bg-foreground text-background px-4 py-2">Growth</div>
-      </header>
-
-      <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="mb-16">
-        <h2 className="text-4xl md:text-6xl font-extrabold tracking-tighter uppercase mb-3">Growth</h2>
-        <div className="font-mono text-sm text-foreground mb-1">$799/mo — 14-day free trial</div>
-        <div className="font-mono text-xs text-foreground/60 mb-5">No credit card required to start</div>
-        <div className="h-0.5 bg-foreground w-full mb-8" />
-        <p className="font-mono text-sm leading-relaxed max-w-2xl">
-          Active audits need more than one framework. Growth gives you all of them.
-        </p>
-      </motion.div>
-
-      <div className="flex flex-col gap-5">
-
-        <motion.div custom={0.3} variants={fadeUp} initial="hidden" animate="show"
-          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}paintings/red-trees-glow.jpeg)`, backgroundSize: "cover", backgroundPosition: "center" }}
-          className="p-5 md:p-10">
-          <div className="bg-background p-6 md:p-8 flex flex-col gap-10">
-            {([
-              {
-                label: "Compliance Frameworks",
-                items: [
-                  "HIPAA (45 CFR Part 164): 18 PHI identifiers detected in real time, evidence mapped to 164.514 Safe Harbor controls",
-                  "GDPR (EU 2016/679): Article 9 special categories detected in prompt and response, consent-aware routing",
-                  "EU AI Act: risk classification and incident logging for high-risk systems, conformity declaration included",
-                  "SOC 2 (AICPA TSC 2022): tamper-proof audit trail with events mapped to CC6, CC7, and A1, Type II-ready",
-                ],
-              },
-              {
-                label: "Legal Agreements",
-                items: [
-                  "HIPAA Business Associate Agreement (BAA) available on request",
-                  "GDPR Data Processing Agreement (DPA) available on request",
-                  "Agreements are pre-drafted and can be executed without a legal review cycle on our end",
-                  "Covers all hosted data processing under your TransparentGuard account",
-                ],
-              },
-            ] as const).map(({ label, items }) => (
-              <section key={label}>
-                <SectionLabel>{label}</SectionLabel>
-                <ul className="flex flex-col gap-3">
-                  {items.map(item => (
-                    <li key={item} className="flex items-start gap-3 font-mono text-sm leading-relaxed">
-                      <span className="shrink-0 mt-px">+</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div custom={0.5} variants={fadeUp} initial="hidden" animate="show"
-          style={{ backgroundImage: `url(${import.meta.env.BASE_URL}paintings/mountains.jpeg)`, backgroundSize: "cover", backgroundPosition: "center" }}
-          className="p-5 md:p-10">
-          <div className="bg-background p-6 md:p-8 flex flex-col gap-10">
-            {([
-              {
-                label: "Audit & Retention",
-                items: [
-                  "7-year audit log retention: meets HIPAA 45 CFR 164.530(j) record-keeping requirements",
-                  "Tamper-evident log chaining: every audit event is hash-linked to the previous one",
-                  "One CLI command generates a structured JSON evidence package ready for your auditor",
-                  "Audit events in OCSF format: compatible with AWS Security Hub, Splunk, and your SIEM",
-                ],
-              },
-              {
-                label: "Support",
-                items: [
-                  "Priority support over Slack and email",
-                  "8-hour response SLA on all support requests",
-                  "Direct escalation path to the engineering team for compliance-critical issues",
-                ],
-              },
-            ] as const).map(({ label, items }) => (
-              <section key={label}>
-                <SectionLabel>{label}</SectionLabel>
-                <ul className="flex flex-col gap-3">
-                  {items.map(item => (
-                    <li key={item} className="flex items-start gap-3 font-mono text-sm leading-relaxed">
-                      <span className="shrink-0 mt-px">+</span>{item}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </motion.div>
-
-      </div>
-
-      <div className="border-t-2 border-foreground mt-16 pt-10">
-        <a href="https://transparentguard.com"
-          className="inline-flex items-center gap-4 bg-foreground text-background px-10 py-5 text-lg font-bold uppercase tracking-widest font-mono hover:bg-foreground/90 transition-colors duration-200 focus:outline-none">
-          Start Free Trial <ExternalLink size={20} strokeWidth={2.5} />
-        </a>
-      </div>
-    </motion.div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Enterprise page
 // ---------------------------------------------------------------------------
 
@@ -2545,19 +2305,13 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-foreground selection:text-background">
       <AnimatePresence mode="wait">
         {page === "hero" && (
-          <HeroPage key="hero" onStart={() => setPage("start")} onDocs={() => setPage("docs")} onEnterprise={() => setPage("enterprise")} onOem={() => setPage("oem")} onCompany={() => setPage("company")} onResearch={() => setPage("research")} onStartup={() => setPage("startup")} onGrowth={() => setPage("growth")} />
+          <HeroPage key="hero" onStart={() => setPage("start")} onDocs={() => setPage("docs")} onEnterprise={() => setPage("enterprise")} onOem={() => setPage("oem")} onCompany={() => setPage("company")} onResearch={() => setPage("research")} />
         )}
         {page === "start" && (
           <ContentPage key="content" onBack={() => setPage("hero")} />
         )}
         {page === "docs" && (
           <DocsPage key="docs" onBack={() => setPage("hero")} />
-        )}
-        {page === "startup" && (
-          <StartupPage key="startup" onBack={() => setPage("hero")} />
-        )}
-        {page === "growth" && (
-          <GrowthPage key="growth" onBack={() => setPage("hero")} />
         )}
         {page === "enterprise" && (
           <EnterprisePage key="enterprise" onBack={() => setPage("hero")} />
