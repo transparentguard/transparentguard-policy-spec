@@ -1,0 +1,34 @@
+{
+  "name": "@transparentguard/cli",
+  "version": "0.1.0",
+  "description": "TransparentGuard CLI — validate policies, run test suites, generate compliance reports, and serve as an MCP tool server",
+  "bin": {
+    "transparentguard": "./dist/index.js",
+    "tg": "./dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch --noEmit"
+  },
+  "dependencies": {
+    "@transparentguard/runtime": "workspace:*",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.14.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/transparentguard/runtime"
+  },
+  "homepage": "https://transparentguard.com"
+}
