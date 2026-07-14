@@ -51,6 +51,9 @@ function selectEncoding(model: string): string {
   return "cl100k_base";
 }
 
+/** @deprecated Use countTokens — kept for backwards compatibility */
+export const approximateTokenCount = (text: string): number => countTokens(text);
+
 export function countTokens(text: string, model = ""): number {
   if (!text) return 0;
 
