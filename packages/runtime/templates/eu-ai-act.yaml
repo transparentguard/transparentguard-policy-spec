@@ -1,0 +1,168 @@
+# TransparentGuard Policy Spec — EU AI Act Baseline Template
+# -----------------------------------------------------------
+# Activate by adding compliance_frameworks: [eu-ai-act] to your policy.
+#
+# Coverage: Regulation (EU) 2024/1689 — AI Act (in force August 2024)
+# Annex III high-risk AI system obligations covered:
+#
+#   Article  9  — Risk management system: continuous threat detection, injection and jailbreak blocking
+#   Article 10  — Data governance: PII minimisation and special-category redaction on all inputs
+#   Article 11  — Technical documentation: structured audit record for every evaluation
+#   Article 13  — Transparency: policy file is human-readable YAML; audit log is auditor-consumable
+#   Article 14  — Human oversight: warn action creates mandatory human review trigger
+#   Article 15  — Accuracy, robustness, cybersecurity: jailbreak and injection blocked pre-request
+#   Article 17  — Quality management: continuous monitoring and tamper-evident audit chain
+#   Article 61  — Post-market monitoring: full audit stream available for ongoing review
+#   Article 73  — Serious incident reporting: threshold alerts auto-fire on high-violation density
+
+tps_version: "1.0"
+name: "transparentguard/eu-ai-act-baseline"
+description: >
+  TransparentGuard EU AI Act Baseline Template v2024.1.
+  Implements Regulation (EU) 2024/1689 obligations for Annex III high-risk AI systems.
+  Covers risk management (Art. 9), data governance (Art. 10), technical documentation (Art. 11),
+  transparency (Art. 13), human oversight (Art. 14), robustness (Art. 15),
+  quality management (Art. 17), post-market monitoring (Art. 61), and
+  serious incident reporting (Art. 73).
+  Activate by adding compliance_frameworks: [eu-ai-act] to your policy.
+
+default_action: allow
+
+compliance_frameworks:
+  - eu-ai-act
+
+audit:
+  enabled: true
+  destination: "stdout://"
+  format: ocsf
+  # Article 61 post-market monitoring: retain all evaluation records
+  retention_days: 1825  # 5 years; adjust to 2555 (7yr) for HIPAA co-compliance
+  events:
+    - blocked
+    - redacted
+    - warned
+    - allowed
+    - error
+  chain_integrity:
+    enabled: true
+    algorithm: sha256
+    verify_on_startup: true
+    alert_on_break: true
+    sidecar_path: ".tg-chain.sidecar"
+
+rules:
+  # Article 9 — Risk management: block prompt injection pre-request
+  - id: eu_ai_act_art9_injection_block
+    description: "Art. 9 risk management: block prompt injection attempts before LLM access."
+    stage: pre-request
+    type: classify
+    classifier: "built-in/prompt-injection-v2"
+    threshold: 0.55
+    action: block
+    on_violation: block
+    log: true
+    enabled: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 9 — Risk Management System"
+      annex_iii: true
+
+  # Article 9 — Risk management: block jailbreak attempts pre-request
+  - id: eu_ai_act_art9_jailbreak_block
+    description: "Art. 9 risk management: block jailbreak attempts before LLM access."
+    stage: pre-request
+    type: classify
+    classifier: "built-in/jailbreak-v1"
+    threshold: 0.50
+    action: block
+    on_violation: block
+    log: true
+    enabled: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 9 — Risk Management System"
+      annex_iii: true
+
+  # Article 10 — Data governance: redact PII from prompts (data minimisation)
+  - id: eu_ai_act_art10_pii_redact_pre
+    description: "Art. 10 data governance: redact personal data from prompts before LLM processing."
+    stage: pre-request
+    type: pii_detection
+    action: redact
+    on_violation: redact
+    log: true
+    enabled: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 10 — Data and Data Governance"
+      annex_iii: true
+
+  # Article 10 — Data governance: redact PII from responses
+  - id: eu_ai_act_art10_pii_redact_post
+    description: "Art. 10 data governance: redact personal data from LLM responses."
+    stage: post-response
+    type: pii_detection
+    action: redact
+    on_violation: redact
+    log: true
+    enabled: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 10 — Data and Data Governance"
+      annex_iii: true
+
+  # Article 14 — Human oversight: warn on toxicity to require human review
+  - id: eu_ai_act_art14_toxicity_warn
+    description: "Art. 14 human oversight: flag toxic content for mandatory human review."
+    stage: post-response
+    type: classify
+    classifier: "built-in/toxicity-v1"
+    threshold: 0.45
+    action: warn
+    on_violation: warn
+    log: true
+    enabled: true
+    metadata:
+      regulatory_ref: "EU AI Act Article 14 — Human Oversight"
+      annex_iii: true
+
+  # Article 15 — Robustness: data residency enforcement (disabled by default; configure regions)
+  - id: eu_ai_act_art15_data_residency
+    description: "Art. 15 robustness: enforce geographic routing for data processing."
+    stage: pre-request
+    action: enforce
+    enforce_type: data_residency
+    allowed_regions:
+      - "eu-west-*"
+      - "eu-central-*"
+      - "eu-north-*"
+      - "europe-*"
+    on_violation: warn
+    log: true
+    enabled: false  # Enable and set your allowed regions
+    metadata:
+      regulatory_ref: "EU AI Act Article 15 — Accuracy, Robustness and Cybersecurity"
+      annex_iii: true
+
+thresholds:
+  # Article 73 — Serious incident reporting: auto-alert on high block/redaction density
+  - id: eu_ai_act_art73_incident_alert
+    rule_id: eu_ai_act_art9_injection_block
+    violation_type: blocked
+    count: 10
+    window: "1h"
+    action: notify
+    notify_url: "https://your-incident-webhook.example.com/eu-ai-act-alert"
+    payload_template: "eu-ai-act-article-73"
+    metadata:
+      description: "Sustained injection/jailbreak volume — assess Article 73 serious incident reporting obligation"
+      regulatory_ref: "EU AI Act Article 73 — Reporting of Serious Incidents"
+
+  # Article 73 — Serious incident reporting: auto-alert on PII breach volume
+  - id: eu_ai_act_art73_pii_breach_alert
+    rule_id: eu_ai_act_art10_pii_redact_pre
+    violation_type: redacted
+    count: 25
+    window: "1h"
+    action: notify
+    notify_url: "https://your-incident-webhook.example.com/eu-ai-act-alert"
+    payload_template: "eu-ai-act-article-73"
+    metadata:
+      description: "High PII redaction volume — assess Article 73 serious incident reporting and GDPR Art. 33 co-obligation"
+      regulatory_ref: "EU AI Act Article 73 — Reporting of Serious Incidents"

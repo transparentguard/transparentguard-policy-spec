@@ -1,6 +1,6 @@
 /**
  * TransparentGuard Runtime — PIE Evidence Package Exporter
- * Generates structured audit evidence packages for SOC 2, FedRAMP, HIPAA, and GDPR auditors.
+ * Generates structured audit evidence packages for SOC 2, FedRAMP, HIPAA, GDPR, and EU AI Act auditors.
  * Output is a self-contained JSON document consumable by audit tools and GRC platforms.
  */
 
@@ -20,6 +20,24 @@ export interface EvidenceControl {
   notes: string;
 }
 
+export interface EvidenceIncidentFlag {
+  article: string;
+  description: string;
+  event_count: number;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface EvidenceConformityDeclaration {
+  declaration_version: "1.0";
+  framework: string;
+  generated_at: string;
+  articles_satisfied: string[];
+  articles_not_evaluated: string[];
+  articles_with_violations: string[];
+  statement: string;
+}
+
 export interface EvidencePackage {
   tg_evidence_version: "1.0";
   generated_at: string;
@@ -35,6 +53,12 @@ export interface EvidencePackage {
   /** Full event log for auditor review */
   audit_events: AuditEvent[];
   summary: string;
+  /** EU AI Act only: automated risk tier classification */
+  risk_tier?: "unacceptable" | "high" | "limited" | "minimal";
+  /** EU AI Act only: Article 73 incident flags */
+  incident_flags?: EvidenceIncidentFlag[];
+  /** EU AI Act only: conformity declaration */
+  conformity_declaration?: EvidenceConformityDeclaration;
 }
 
 export interface EvidenceExportOptions {
@@ -84,11 +108,69 @@ const GDPR_CONTROLS: ControlMapping[] = [
   { control_id: "Article 32", control_name: "Security of Processing", framework: "gdpr", notes: "Prompt injection blocked; technical controls applied to all processing." },
 ];
 
+const EU_AI_ACT_CONTROLS: ControlMapping[] = [
+  {
+    control_id: "Article 9",
+    control_name: "Risk Management System",
+    framework: "eu-ai-act",
+    notes: "Continuous risk identification and mitigation: prompt injection and jailbreak attempts blocked pre-request.",
+  },
+  {
+    control_id: "Article 10",
+    control_name: "Data and Data Governance",
+    framework: "eu-ai-act",
+    notes: "Personal data minimised at the point of processing: PII redacted from prompts and responses before LLM access.",
+  },
+  {
+    control_id: "Article 11",
+    control_name: "Technical Documentation",
+    framework: "eu-ai-act",
+    notes: "Structured audit record produced for every evaluation; policy file is version-controlled YAML readable by auditors.",
+  },
+  {
+    control_id: "Article 13",
+    control_name: "Transparency and Provision of Information",
+    framework: "eu-ai-act",
+    notes: "Policy file is human-readable; every enforcement decision is logged with rule ID, outcome, and regulatory reference.",
+  },
+  {
+    control_id: "Article 14",
+    control_name: "Human Oversight",
+    framework: "eu-ai-act",
+    notes: "Warn action creates a mandatory human review trigger; no automated harm delivered without an oversight checkpoint.",
+  },
+  {
+    control_id: "Article 15",
+    control_name: "Accuracy, Robustness and Cybersecurity",
+    framework: "eu-ai-act",
+    notes: "Jailbreak and injection attempts blocked pre-request; encoding-attack detection covers base64, leetspeak, and homoglyphs.",
+  },
+  {
+    control_id: "Article 17",
+    control_name: "Quality Management System",
+    framework: "eu-ai-act",
+    notes: "Continuous monitoring via tamper-evident SHA-256 audit chain; policy changes are version-controlled and diffable.",
+  },
+  {
+    control_id: "Article 61",
+    control_name: "Post-Market Monitoring",
+    framework: "eu-ai-act",
+    notes: "Full audit stream retained and available for ongoing review; OCSF-format events compatible with SIEM ingestion.",
+  },
+  {
+    control_id: "Article 73",
+    control_name: "Reporting of Serious Incidents",
+    framework: "eu-ai-act",
+    notes: "Threshold alerts auto-fire on sustained injection/jailbreak or PII breach volume; incident flags emitted in evidence package.",
+  },
+];
+
 const CONTROL_MAP: Record<string, ControlMapping[]> = {
   soc2: SOC2_CONTROLS,
   "fedramp-moderate": FEDRAMP_CONTROLS,
   hipaa: HIPAA_CONTROLS,
   gdpr: GDPR_CONTROLS,
+  "eu-ai-act": EU_AI_ACT_CONTROLS,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +183,7 @@ const CONTROL_MAP: Record<string, ControlMapping[]> = {
  */
 export function generateEvidencePackage(
   events: AuditEvent[],
-  framework: "soc2" | "fedramp-moderate" | "hipaa" | "gdpr",
+  framework: "soc2" | "fedramp-moderate" | "hipaa" | "gdpr" | "eu-ai-act",
   options: EvidenceExportOptions = {},
 ): EvidencePackage {
   const now = new Date().toISOString();
@@ -156,7 +238,7 @@ export function generateEvidencePackage(
     `${events.length} total events, ${satisfiedControls}/${controls.length} controls satisfied. ` +
     `Period: ${periodStart.slice(0, 10)} to ${periodEnd.slice(0, 10)}.`;
 
-  return {
+  const pkg: EvidencePackage = {
     tg_evidence_version: "1.0",
     generated_at: now,
     framework,
@@ -171,4 +253,61 @@ export function generateEvidencePackage(
     audit_events: options.include_full_events !== false ? events : [],
     summary,
   };
+
+  // EU AI Act: attach automated risk tier, incident flags, and conformity declaration
+  if (framework === "eu-ai-act") {
+    // Risk tier: determined by violation density
+    const violationRate = events.length > 0 ? (blocked + redacted) / events.length : 0;
+    pkg.risk_tier =
+      violationRate > 0.5  ? "high"    :
+      violationRate > 0.1  ? "limited" :
+      events.length === 0  ? "minimal" : "minimal";
+
+    // Article 73 incident flags: any sustained pattern of blocks or redactions
+    const incidentFlags: EvidenceIncidentFlag[] = [];
+    const blockedEvents = events.filter((e) => e.event_type === "blocked");
+    const redactedEvents = events.filter((e) => e.event_type === "redacted");
+
+    if (blockedEvents.length >= 5) {
+      const timestamps = blockedEvents.map((e) => e.timestamp).sort();
+      incidentFlags.push({
+        article: "Article 73",
+        description: "Sustained blocking activity detected — assess serious incident reporting obligation.",
+        event_count: blockedEvents.length,
+        first_seen: timestamps[0] ?? now,
+        last_seen: timestamps[timestamps.length - 1] ?? now,
+      });
+    }
+    if (redactedEvents.length >= 10) {
+      const timestamps = redactedEvents.map((e) => e.timestamp).sort();
+      incidentFlags.push({
+        article: "Article 73",
+        description: "High PII redaction volume — assess Article 73 and GDPR Article 33 co-obligation.",
+        event_count: redactedEvents.length,
+        first_seen: timestamps[0] ?? now,
+        last_seen: timestamps[timestamps.length - 1] ?? now,
+      });
+    }
+    pkg.incident_flags = incidentFlags;
+
+    // Conformity declaration
+    const satisfied = controls.filter((c) => c.status === "satisfied").map((c) => c.control_id);
+    const notEvaluated = controls.filter((c) => c.status === "not_evaluated").map((c) => c.control_id);
+    const withViolations = controls.filter((c) => c.violations > 0).map((c) => c.control_id);
+    pkg.conformity_declaration = {
+      declaration_version: "1.0",
+      framework: "eu-ai-act",
+      generated_at: now,
+      articles_satisfied: satisfied,
+      articles_not_evaluated: notEvaluated,
+      articles_with_violations: withViolations,
+      statement:
+        `TransparentGuard Runtime evaluated ${events.length} LLM interactions against EU AI Act ` +
+        `Annex III obligations for the period ${periodStart.slice(0, 10)} to ${periodEnd.slice(0, 10)}. ` +
+        `${satisfied.length} of ${controls.length} articles satisfied. ` +
+        `${incidentFlags.length > 0 ? `${incidentFlags.length} incident flag(s) raised for Article 73 review.` : "No Article 73 incident flags raised."}`,
+    };
+  }
+
+  return pkg;
 }

@@ -7,6 +7,7 @@
 import type { RuleStage } from "../types.js";
 import { classifyMedicalPii } from "./built-in/pii-medical-v1.js";
 import { classifyFinancialPii } from "./built-in/pii-financial-v1.js";
+import { classifyJailbreak } from "./built-in/jailbreak-v1.js";
 
 const DEFAULT_API_BASE = "https://api.transparentguard.com";
 const CLASSIFIER_TIMEOUT_MS = 8000;
@@ -167,6 +168,9 @@ export function heuristicClassify(
       const score = Math.min(hits.length * 0.35, 0.85);
       return { score, label: score > 0.5 ? "violence" : "clean", source: "heuristic" };
     }
+
+    case "built-in/jailbreak-v1":
+      return classifyJailbreak(text);
 
     case "built-in/factual-grounding-v1": {
       // Without context documents we cannot assess grounding — return neutral
