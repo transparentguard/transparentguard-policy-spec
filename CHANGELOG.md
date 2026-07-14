@@ -11,6 +11,15 @@ This spec follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+**Free tier now requires an API key**
+- All free tier users must obtain a `tg_sk_live_` API key via signup at transparentguard.com.
+- The key is free, permanent, and requires no credit card.
+- Set `TG_API_KEY` in your environment before initializing the runtime.
+- Previously, the free tier ran without any API key. This is no longer supported.
+- Air-gapped and enterprise deployments are unaffected and continue to use `TG_LICENSE_KEY`.
+
+### Changed (continued)
+
 **License enforcement — fail-closed on API unreachability**
 - The runtime no longer silently downgrades to the free tier when the TransparentGuard license API is unreachable.
 - New behavior: if a valid license status was cached within the last hour (grace window), that status is used and a warning is logged. If no grace cache is available, the runtime throws `TransparentGuardError` with code `api_unreachable` rather than continuing as free.
