@@ -182,8 +182,8 @@ def detect_pii(text: str, target: PiiTarget) -> List[PiiMatch]:
                 span = (m.start(), m.end())
                 if span in seen:
                     continue
-                # Assign confidence based on specificity
-                confidence = _confidence_for_category(category, m.group(0))
+                # Assign confidence based on match quality, checksums, and context
+                confidence = _confidence_for_category(category, m.group(0), text)
                 if confidence < confidence_threshold:
                     continue
                 seen.add(span)
@@ -199,10 +199,39 @@ def detect_pii(text: str, target: PiiTarget) -> List[PiiMatch]:
     return _remove_overlapping(matches)
 
 
-def _confidence_for_category(category: str, text: str) -> float:
+def _luhn_check(number: str) -> bool:
+    """Luhn algorithm checksum — validates credit card numbers."""
+    digits = [int(c) for c in number if c.isdigit()]
+    if len(digits) < 13:
+        return False
+    total = 0
+    for i, d in enumerate(reversed(digits)):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _ssn_valid_range(digits: str) -> bool:
+    """Rejects known-invalid SSN area numbers (000, 666, 900-999)."""
+    if len(digits) < 3:
+        return False
+    area = int(digits[:3])
+    return area not in (0, 666) and not (900 <= area <= 999)
+
+
+def _confidence_for_category(category: str, match_text: str, full_text: str = "") -> float:
     """
-    Returns an estimated confidence score for a PII match.
-    High-precision patterns get 0.95+; looser patterns get lower scores.
+    Computes a dynamic confidence score for a PII match.
+
+    Signals (additive, clamped to [0.0, 1.0]):
+    - Base score per category precision tier
+    - +0.08 for labelled match (PII keyword adjacent in context)
+    - +0.08 checksum bonus for credit_card/ssn passing validation
+    - -0.15 penalty (capped at 0.60) if checksum fails
+    - +0.05 if PII-adjacent context words appear within 100 chars of match
     """
     high_precision = {
         "email", "credit_card", "ssn", "iban", "ip_address",
@@ -212,12 +241,58 @@ def _confidence_for_category(category: str, text: str) -> float:
         "phone", "passport", "bank_account", "dob", "driver_license",
         "national_id", "health_condition",
     }
+
     if category in high_precision:
-        return 0.95
-    if category in medium_precision:
-        return 0.82
-    # name, address — lower precision
-    return 0.72
+        base = 0.88
+    elif category in medium_precision:
+        base = 0.76
+    else:
+        base = 0.65  # name, address, keyword categories
+
+    score = base
+
+    # Labelled match: PII keyword appears just before the match in full text
+    if full_text:
+        match_pos = full_text.find(match_text)
+        if match_pos > 0:
+            pre_window = full_text[max(0, match_pos - 80):match_pos].lower()
+            label_keywords = [
+                "ssn", "passport", "dob", "routing", "ein", "tin", "iban",
+                "mrn", "npi", "credit card", "credit_card", "driver", "license",
+                "account", "member id", "patient", "date of birth",
+            ]
+            if any(kw in pre_window for kw in label_keywords):
+                score += 0.08
+
+            # Context proximity: PII-adjacent nouns near the match
+            window_start = max(0, match_pos - 100)
+            window_end   = min(len(full_text), match_pos + len(match_text) + 100)
+            context = full_text[window_start:window_end].lower()
+            context_words = [
+                "patient", "account", "billing", "insurance", "member",
+                "medical record", "diagnosis", "prescription", "routing",
+                "social security", "birth", "license", "passport",
+            ]
+            if any(w in context for w in context_words):
+                score += 0.05
+
+    # Checksum / range validation
+    clean = re.sub(r"[\s\-]", "", match_text)
+    if category == "credit_card":
+        if _luhn_check(clean):
+            score += 0.08
+        else:
+            score -= 0.15
+            score = min(score, 0.60)
+    elif category == "ssn":
+        digits_only = re.sub(r"\D", "", clean)
+        if _ssn_valid_range(digits_only):
+            score += 0.08
+        else:
+            score -= 0.15
+            score = min(score, 0.60)
+
+    return max(0.0, min(1.0, score))
 
 
 def _remove_overlapping(matches: List[PiiMatch]) -> List[PiiMatch]:

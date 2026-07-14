@@ -166,12 +166,16 @@ class WrappedAnthropicClient:
         }
         final_content = self._do_post_response(raw_content, model, system_prompt, usage)
 
-        # Patch response content
+        # Patch response content — fail closed: if we cannot apply redaction, block the response
         if hasattr(response, "content") and isinstance(response.content, list) and response.content:
-            try:
-                response.content[0].text = final_content
-            except (AttributeError, TypeError):
-                pass
+            block0 = response.content[0]
+            if not hasattr(block0, "text"):
+                raise TransparentGuardError(
+                    "Redaction could not be applied: Anthropic response content block has no "
+                    "'text' attribute. Response blocked to prevent potential PII leak.",
+                    "policy_violation",
+                )
+            block0.text = final_content
         return response
 
     def _create_streaming_sync(
@@ -226,10 +230,14 @@ class WrappedAnthropicClient:
         model = getattr(response, "model", params.get("model", "unknown"))
         final_content = self._do_post_response(raw_content, model, system_prompt)
         if hasattr(response, "content") and isinstance(response.content, list) and response.content:
-            try:
-                response.content[0].text = final_content
-            except (AttributeError, TypeError):
-                pass
+            block0 = response.content[0]
+            if not hasattr(block0, "text"):
+                raise TransparentGuardError(
+                    "Redaction could not be applied: Anthropic response content block has no "
+                    "'text' attribute. Response blocked to prevent potential PII leak.",
+                    "policy_violation",
+                )
+            block0.text = final_content
         await self._emitter.flush()
         return response
 
