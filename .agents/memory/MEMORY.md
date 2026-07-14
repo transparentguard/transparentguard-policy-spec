@@ -1,3 +1,4 @@
 - [Phase 4 proxy architecture](phase4-proxy.md) — HTTP proxy, OTEL, OCI loader, Cosign; all in packages/proxy and packages/runtime
 - [Phase 5 compliance layer](phase5-compliance.md) — templates, PIE, trust chain; v0.3.0 pushed to transparentguard/runtime
 - [Phase 6 completion](phase6-completion.md) — CLI, offline license, OEM package, MCP server, DocsPage, SLSA/SBOM release workflow; all pushed to GitHub
+- [Phase 7 completion](phase7-completion.md) — S3 retention enforcement, Terraform, Cosign workflow, OEM billing server; what was real vs. built; all typechecks clean
