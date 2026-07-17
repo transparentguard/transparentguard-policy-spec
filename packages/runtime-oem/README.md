@@ -50,7 +50,7 @@ TG_SIGNING_SECRET=<secret> tg keys create \
   --days 365
 ```
 
-Set `TG_LICENSE_KEY` to the generated key in your deployment — no calls to `api.transparentguard.com` are ever made.
+Set `TG_LICENSE_KEY` to the generated key in your deployment — no calls to `api.transparentguard.dev` are ever made.
 
 ## Full API
 
