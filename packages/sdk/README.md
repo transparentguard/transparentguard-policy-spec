@@ -1,6 +1,6 @@
 # @transparentguard/sdk
 
-Lazy-init TypeScript SDK for [TransparentGuard](https://transparentguard.com) — AI policy enforcement with zero boilerplate.
+Lazy-init TypeScript SDK for [TransparentGuard](https://transparentguard.dev) — AI policy enforcement with zero boilerplate.
 
 Wraps OpenAI and Anthropic clients transparently. Policy loads on the first API call. No `await init()` required.
 
@@ -98,7 +98,7 @@ audit:
 
 ## Docs
 
-Full documentation at [transparentguard.com/docs](https://transparentguard.com/docs).
+Full documentation at [transparentguard.dev/docs](https://transparentguard.dev/docs).
 
 ## License
 
