@@ -46,11 +46,26 @@ const VALID_TIERS = new Set([
 ]);
 
 const VALID_FEATURES = new Set([
+  // Free tier — no features required
+  // Startup tier
   "ml_classifiers", "semantic_targets", "confidentiality_check",
   "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
-  "audit_azure", "policy_registry", "oem_embed", "fedramp",
-  "trust_chain", "pie", "audit_chain_integrity", "threshold_notifications",
-  "custom_classifier_training",
+  "audit_azure", "audit_chain_integrity", "threshold_notifications",
+  "streaming_window",        // windowed + passthrough streaming modes
+  "provider_risk_tier",      // risk_tier + capability filtering in provider_match
+  // Growth tier
+  "policy_registry", "pie",
+  "multi_environment",       // separate policies per environment (dev/staging/production)
+  "report_generation",       // tg report — structured evidence package export
+  "custom_adapter",          // registerAdapter for non-standard LLM endpoints
+  "classifier_bundle",       // tg classifiers pull — pre-bundled ML classifier download
+  // Enterprise tier
+  "fedramp", "trust_chain", "custom_classifier_training",
+  "offline_mode",            // offline: true — zero outbound calls (requires offline key)
+  "data_sovereignty",        // enforce_type: data_sovereignty + jurisdiction routing
+  "blocked_training_jurisdictions", // blocked_training_jurisdictions in provider_match
+  // OEM tier
+  "oem_embed",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -78,6 +93,7 @@ export interface LicenseStatus {
 }
 
 export type LicenseFeature =
+  // Startup tier
   | "ml_classifiers"
   | "semantic_targets"
   | "confidentiality_check"
@@ -86,14 +102,26 @@ export type LicenseFeature =
   | "audit_postgres"
   | "audit_gcs"
   | "audit_azure"
-  | "policy_registry"
-  | "oem_embed"
-  | "fedramp"
-  | "trust_chain"
-  | "pie"
   | "audit_chain_integrity"
   | "threshold_notifications"
-  | "custom_classifier_training";
+  | "streaming_window"               // windowed + passthrough streaming modes
+  | "provider_risk_tier"             // risk_tier + capability filtering in provider_match
+  // Growth tier
+  | "policy_registry"
+  | "pie"
+  | "multi_environment"              // separate policies per environment
+  | "report_generation"              // tg report — structured evidence package export
+  | "custom_adapter"                 // registerAdapter for non-standard LLM endpoints
+  | "classifier_bundle"              // tg classifiers pull — pre-bundled ML classifier download
+  // Enterprise tier
+  | "fedramp"
+  | "trust_chain"
+  | "custom_classifier_training"
+  | "offline_mode"                   // offline: true — zero outbound calls
+  | "data_sovereignty"               // enforce_type: data_sovereignty
+  | "blocked_training_jurisdictions" // blocked_training_jurisdictions in provider_match
+  // OEM tier
+  | "oem_embed";
 
 export class TransparentGuardError extends Error {
   constructor(
@@ -563,6 +591,63 @@ export async function checkLicense(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tier ordering + minimum feature sets
+// ---------------------------------------------------------------------------
+
+/** Numeric rank for tier comparison — higher = more capable. */
+export const TIER_RANK: Record<LicenseTier, number> = {
+  free: 0, startup: 1, growth: 2, enterprise: 3, oem: 4,
+};
+
+/**
+ * Canonical minimum feature set for each tier.
+ * Used by key-issuance tooling and offline key generation (`tg keys create`).
+ * The API may grant additional features on top of these.
+ */
+export const TIER_MINIMUM_FEATURES: Record<LicenseTier, LicenseFeature[]> = {
+  free: [],
+  startup: [
+    "ml_classifiers", "semantic_targets", "confidentiality_check",
+    "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
+    "audit_azure", "audit_chain_integrity", "threshold_notifications",
+    "streaming_window", "provider_risk_tier",
+  ],
+  growth: [
+    "ml_classifiers", "semantic_targets", "confidentiality_check",
+    "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
+    "audit_azure", "audit_chain_integrity", "threshold_notifications",
+    "streaming_window", "provider_risk_tier",
+    "policy_registry", "pie",
+    "multi_environment", "report_generation", "custom_adapter", "classifier_bundle",
+  ],
+  enterprise: [
+    "ml_classifiers", "semantic_targets", "confidentiality_check",
+    "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
+    "audit_azure", "audit_chain_integrity", "threshold_notifications",
+    "streaming_window", "provider_risk_tier",
+    "policy_registry", "pie",
+    "multi_environment", "report_generation", "custom_adapter", "classifier_bundle",
+    "fedramp", "trust_chain", "custom_classifier_training",
+    "offline_mode", "data_sovereignty", "blocked_training_jurisdictions",
+  ],
+  oem: [
+    "ml_classifiers", "semantic_targets", "confidentiality_check",
+    "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
+    "audit_azure", "audit_chain_integrity", "threshold_notifications",
+    "streaming_window", "provider_risk_tier",
+    "policy_registry", "pie",
+    "multi_environment", "report_generation", "custom_adapter", "classifier_bundle",
+    "fedramp", "trust_chain", "custom_classifier_training",
+    "offline_mode", "data_sovereignty", "blocked_training_jurisdictions",
+    "oem_embed",
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Feature + tier assertion helpers
+// ---------------------------------------------------------------------------
+
 /**
  * Asserts that the current license includes the requested feature.
  * Throws TransparentGuardError with code "feature_requires_paid_tier" if not.
@@ -577,6 +662,25 @@ export function assertFeature(
       `${featureDescription} requires a paid TransparentGuard plan. Upgrade at transparentguard.com.`,
       "feature_requires_paid_tier",
       feature,
+    );
+  }
+}
+
+/**
+ * Asserts that the current license tier is at least `required`.
+ * Use when a feature is tier-gated rather than feature-flag-gated (e.g. call-volume limits).
+ * Throws TransparentGuardError with code "feature_requires_paid_tier" if not.
+ */
+export function assertTier(
+  status: LicenseStatus,
+  required: LicenseTier,
+  featureDescription: string,
+): void {
+  if (TIER_RANK[status.tier] < TIER_RANK[required]) {
+    throw new TransparentGuardError(
+      `${featureDescription} requires a ${required} plan or above. Upgrade at transparentguard.com.`,
+      "feature_requires_paid_tier",
+      required,
     );
   }
 }
