@@ -128,13 +128,54 @@ podAnnotations:
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
+  runAsGroup: 1000
   fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
 
+# Container-level security context — applied to every container in the pod.
+# These defaults satisfy the Kubernetes "restricted" Pod Security Standard.
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
   capabilities:
     drop: [ALL]
+  seccompProfile:
+    type: RuntimeDefault
+
+# ---------------------------------------------------------------------------
+# Network Policy (Phase 10 — self-hosted security posture)
+# Requires a CNI that supports NetworkPolicy (Calico, Cilium, Weave, etc.)
+# ---------------------------------------------------------------------------
+networkPolicy:
+  # Set to true to create a NetworkPolicy resource.
+  # When disabled the proxy is reachable from any pod in the cluster.
+  enabled: false
+
+  # Ingress rules. When omitted, defaults to allow-from-same-namespace on port 8080.
+  # Use this to restrict which namespaces / pods can call the proxy.
+  ingress: []
+  # Example — only allow traffic from pods labelled app=my-service:
+  # ingress:
+  #   - from:
+  #       - podSelector:
+  #           matchLabels:
+  #             app: my-service
+  #     ports:
+  #       - port: 8080
+  #         protocol: TCP
+
+  # Allow Prometheus to scrape /metrics from the monitoring namespace
+  allowMetricsScrape: false
+
+  # Additional TCP egress ports beyond DNS (53) and HTTPS (443).
+  # Add port 9090 here if your OTEL collector is HTTP, for example.
+  extraEgressPorts: []
+
+  # Fully custom egress rules. When set, appended to the generated egress list.
+  egress: []
 
 nodeSelector: {}
 tolerations: []
