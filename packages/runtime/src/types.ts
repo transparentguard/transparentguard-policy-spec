@@ -71,12 +71,75 @@ export type RuleAction = "redact" | "classify" | "enforce" | "tag" | "block" | "
 export type EnforceType =
   | "provider_allowlist"
   | "token_budget"
-  | "data_residency"
+  | "data_residency"           // legacy — kept for backward compat; use data_sovereignty
+  | "data_sovereignty"         // full three-jurisdiction model (Section 31)
   | "rate_limit"
   | "tool_allowlist"
   | "schema_validation"
   | "confidentiality"
   | "factual_grounding";
+
+// ---------------------------------------------------------------------------
+// Rule-level provider scoping (Section 30) — Tiers 1-3
+// ---------------------------------------------------------------------------
+
+/**
+ * Tier 2 + 3 provider matching config.
+ * Applied before any rule evaluator runs. A no-match SKIPS the rule (does not block).
+ */
+export interface ProviderCapabilityMatch {
+  /** Required capabilities. Rule skipped if provider lacks any of these. */
+  capabilities?: string[];
+  /** Required risk tiers. Rule skipped if provider's tier is not in this list. */
+  risk_tier?: Array<"low" | "medium" | "high" | "critical">;
+  /** Minimum context window (tokens). Rule skipped if provider's max is below this. */
+  min_context_window?: number;
+  /** ISO-8601 date. Rule skipped if provider's training cutoff is before this date. */
+  training_cutoff_after?: string;
+  /** ISO 3166-1 alpha-2. Rule skipped if provider trained in any of these jurisdictions. */
+  blocked_training_jurisdictions?: string[];
+  /** Required compliance attestations. Rule skipped if provider lacks any of these. */
+  requires_attestation?: string[];
+  /** When true, rule skipped unless provider returns a TG-compatible signed response header. */
+  requires_signed_response?: boolean;
+  /** Provider globs to explicitly exclude. Evaluated before positive criteria. */
+  excludes?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Data sovereignty types (Section 31)
+// ---------------------------------------------------------------------------
+
+export interface DataSubjectJurisdiction {
+  /**
+   * How to determine the data subject's jurisdiction at runtime.
+   * geo_ip:        read from SDK geo middleware output (metadata.tg_geo_jurisdiction)
+   * request_header: read from X-TG-Subject-Jurisdiction header
+   * metadata:      read from metadata.tg_subject_jurisdiction
+   */
+  infer_from?: "geo_ip" | "request_header" | "metadata";
+  /**
+   * ISO 3166-1 alpha-2 codes (or "EU", "EEA") that this rule covers.
+   * If the subject is NOT in this list, the rule is skipped (not an error).
+   */
+  accept?: string[];
+  /** Fallback jurisdiction when inference fails. */
+  fallback?: string;
+}
+
+export interface TransferMechanismConfig {
+  /**
+   * At least one of these transfer mechanisms must be in place for the
+   * transfer to be treated as lawful. Checked against the TG Adequacy
+   * Decision table and provider-attested metadata.
+   */
+  require_one_of?: Array<
+    | "adequacy_decision"
+    | "standard_contractual_clauses"
+    | "binding_corporate_rules"
+    | "derogation"
+  >;
+}
 
 export type OnViolation = "block" | "redact" | "warn" | "log" | "allow";
 
@@ -92,18 +155,24 @@ export interface TPSRule {
   enabled?: boolean;
   stage: RuleStage;
   action: RuleAction;
-  // targets — required for redact and classify
+  // ── Rule-level provider scoping (Section 30) ──────────────────────────
+  /** Tier 1: glob list — rule is SKIPPED (not blocked) when provider doesn't match. */
+  providers?: string[];
+  /** Tiers 2+3: capability/attestation matching — merged with providers[] check. */
+  provider_match?: ProviderCapabilityMatch;
+  // ── targets — required for redact and classify ─────────────────────────
   targets?: TPSTarget[];
-  // classify fields
+  // ── classify fields ────────────────────────────────────────────────────
   classifier?: string;
   threshold?: number;
   invert_threshold?: boolean;
-  // enforce fields
+  // ── enforce fields ─────────────────────────────────────────────────────
   enforce_type?: EnforceType;
   allowed_providers?: string[];
   max_tokens_per_request?: number;
   max_tokens_per_day_per_key?: number;
   max_tokens_per_hour_per_key?: number;
+  // legacy data_residency field — kept for backward compat
   allowed_regions?: string[];
   max_requests_per_minute_per_key?: number;
   max_requests_per_hour_per_key?: number;
@@ -114,13 +183,28 @@ export interface TPSRule {
   protected_content_ref?: "system_prompt" | "context_documents" | "user_provided_data";
   similarity_threshold?: number;
   canary_tokens?: boolean;
-  // tag fields
+  // ── data_sovereignty fields (Section 31) ───────────────────────────────
+  data_subject_jurisdiction?: DataSubjectJurisdiction;
+  /** Allowed cloud regions for AI processing. Prefix wildcards supported (eu-*). */
+  allowed_processor_regions?: string[];
+  /** ISO 3166-1 alpha-2 codes. Processing in any of these jurisdictions is blocked. */
+  blocked_processor_jurisdictions?: string[];
+  /** ISO 3166-1 alpha-2. Rule violated if provider trained in any of these countries. */
+  blocked_training_jurisdictions?: string[];
+  transfer_mechanism?: TransferMechanismConfig;
+  /**
+   * Machine-readable legal basis code emitted in every sovereignty audit event.
+   * Common values: gdpr_article_6_1_a through 6_1_f, gdpr_article_9_2_*,
+   * hipaa_treatment_payment_operations, ccpa_business_purpose.
+   */
+  legal_basis?: string;
+  // ── tag fields ─────────────────────────────────────────────────────────
   tags?: Record<string, string>;
-  // block fields
+  // ── block fields ───────────────────────────────────────────────────────
   block_message?: string;
-  // log fields
+  // ── log fields ─────────────────────────────────────────────────────────
   log_level?: "debug" | "info" | "warn";
-  // shared
+  // ── shared ─────────────────────────────────────────────────────────────
   on_violation?: OnViolation;
   log?: boolean;
   sample_rate?: number;
