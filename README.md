@@ -155,6 +155,85 @@ MIT. See [LICENSE](./LICENSE).
 
 ---
 
+## Phase 10 — Performance, Security Posture & Provider Adapters
+
+### Fail-open / Fail-closed (`fail_mode`)
+
+Per-environment and policy-level control over what happens when TG itself errors (network failure, unexpected exception) — distinct from a policy violation:
+
+```yaml
+fail_mode: "closed"   # global default: block on engine error
+
+environments:
+  - name: production
+    fail_mode: "closed"   # safest for HIPAA/FedRAMP
+  - name: staging
+    fail_mode: "open"     # pass-through with audit event on error
+```
+
+### Streaming Window + Passthrough Modes
+
+All three TPS streaming modes are now fully implemented in the OpenAI and Anthropic wrappers:
+
+```typescript
+// Window mode — evaluate every 100 tokens, abort mid-stream on violation
+const client = tg.wrap(new OpenAI());
+const stream = await client.chat.completions.create(
+  { model: "gpt-4o", messages, stream: true },
+  { streamMode: "window", windowTokens: 100, onStreamViolation: "block" }
+);
+
+// Passthrough — yield immediately, evaluate at end
+const stream = await client.chat.completions.create(
+  { model: "gpt-4o", messages, stream: true },
+  { streamMode: "passthrough", onStreamViolation: "passthrough_and_log" }
+);
+```
+
+### Provider Adapter Interface (Section 32)
+
+Formal `ProviderAdapter` interface with 11 built-in adapters:
+
+| Provider     | Compat      | Jurisdiction |
+|--------------|-------------|:------------:|
+| `openai`     | OpenAI      | US           |
+| `anthropic`  | Native      | US           |
+| `groq`       | OpenAI      | US           |
+| `vertex`     | Native      | US           |
+| `mistral`    | OpenAI      | FR (EU)      |
+| `vllm`       | OpenAI      | self-hosted  |
+| `bedrock`    | Native      | US           |
+| `deepseek`   | OpenAI      | CN           |
+| `moonshot`   | OpenAI      | CN           |
+| `zhipu`      | OpenAI      | CN           |
+| `baichuan`   | OpenAI      | CN           |
+
+```typescript
+import { resolveAdapter, registerAdapter } from "@transparentguard/runtime";
+const adapter = resolveAdapter("openai/gpt-4o");
+// adapter.region.jurisdiction → "US"
+
+// Register a custom adapter
+registerAdapter({ providerId: "myco", ... });
+```
+
+### Helm Security Hardening
+
+`charts/transparentguard-proxy/templates/networkpolicy.yaml` — opt-in `NetworkPolicy`:
+- Egress: DNS + HTTPS only; all other egress denied.
+- Ingress: same-namespace only by default; fully configurable.
+- Enable with `networkPolicy.enabled: true` in values.
+
+`values.yaml` now defaults to the Kubernetes "restricted" Pod Security Standard (`runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, `seccompProfile: RuntimeDefault`).
+
+### Multi-cloud Terraform
+
+- `deploy/terraform/modules/gcp/` — Cloud Run + VPC + Cloud SQL + GCS + Artifact Registry + Secret Manager
+- `deploy/terraform/modules/azure/` — Container Apps + VNet + PostgreSQL Flexible + Blob Storage + Key Vault + Managed Identity
+- AWS module (Phase 7) unchanged.
+
+---
+
 ## Phase 9 — Provider Scoping and Data Sovereignty (Section 30 & 31)
 
 ### Rule-Level Provider Scoping (Section 30)
