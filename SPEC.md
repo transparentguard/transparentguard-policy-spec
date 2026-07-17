@@ -3092,3 +3092,369 @@ thresholds:
     metadata:
       regulatory_ref: "EU AI Act Article 5 - Prohibited AI Practices; Article 10(5) - Data Bias Prevention"
 ```
+
+---
+
+## 30. Rule-Level Provider Scoping
+
+### 30.1 Overview
+
+Previous versions of TPS handled provider restrictions through `enforce_type: provider_allowlist`, which is a **blocking** enforcement — it stops the request when the provider is not on the list. Phase 9 introduces a complementary mechanism: **rule-level provider scoping**, which *skips* a rule when the current provider is not in scope.
+
+The distinction matters in practice:
+
+| Mechanism | What happens on mismatch |
+|---|---|
+| `enforce_type: provider_allowlist` | Request is **blocked** |
+| Rule-level `providers` / `provider_match` | Rule is **skipped** (other rules still run) |
+
+This allows writing rules that apply only to specific providers without having to duplicate policy files or use environment overrides. A PHI redaction rule that only makes sense for cloud providers can skip itself for local/self-hosted deployments. A capability-based rule can activate only when the model has vision support.
+
+---
+
+### 30.2 Tier 1 — providers[] (Glob List)
+
+The simplest form: a list of provider/model glob patterns. When a rule has `providers` set, the rule is evaluated only if the request's provider matches at least one positive pattern and no negation patterns.
+
+```yaml
+- id: vision-pii-redaction
+  stage: pre-request
+  action: redact
+  providers:
+    - openai/*        # any OpenAI model
+    - anthropic/*     # any Anthropic model
+    - "!ollama/*"     # but never for local Ollama (negation, evaluated first)
+  targets:
+    - type: pii
+      categories: [pii_all]
+  on_violation: redact
+```
+
+**Glob syntax:**
+
+| Pattern | Matches |
+|---|---|
+| `openai/gpt-4o` | Exactly `openai/gpt-4o` |
+| `openai/*` | `openai`, `openai/gpt-4o`, `openai/o3`, etc. |
+| `eu-*` | Any provider slug starting with `eu-` |
+| `any` | All providers |
+| `!deepseek/*` | Negation — never matches deepseek |
+
+**Negation evaluation order:** negation entries (prefixed `!`) are always evaluated first. If any negation matches, the rule is skipped regardless of positive patterns. This means a rule with `["!deepseek/*", "any"]` will evaluate for every provider except DeepSeek.
+
+**Empty `providers: []`:** An empty array is treated as no scoping — the rule evaluates for all providers. Use this to explicitly annotate that no scoping is intentional.
+
+**No provider specified:** When `payload.provider` is absent or empty, provider scoping is bypassed and the rule evaluates normally. This ensures rules are not silently skipped when provider information is unavailable.
+
+---
+
+### 30.3 Tier 2 — provider_match (Capability and Risk Matching)
+
+When you want rules that adapt to capability tiers rather than named providers — for example, activating extra scrutiny only for reasoning-class models, or skipping a structured-output rule for models that don't support it — use `provider_match`.
+
+```yaml
+- id: reasoning-model-extra-scrutiny
+  stage: pre-request
+  action: classify
+  provider_match:
+    capabilities: [reasoning]
+    risk_tier: [medium, high, critical]
+    training_cutoff_after: "2024-01-01"
+  classifier: built-in/prompt-injection-v3
+  threshold: 0.65
+  on_violation: block
+```
+
+**provider_match fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `capabilities` | string[] | Rule skipped if provider lacks any capability in this list |
+| `risk_tier` | string[] | Rule skipped if provider's risk tier is not in this list |
+| `min_context_window` | integer | Rule skipped if provider's max context window is below this |
+| `training_cutoff_after` | ISO-8601 date | Rule skipped if provider's training cutoff is before this date |
+| `blocked_training_jurisdictions` | ISO 3166-1[] | Rule skipped if provider trained in any listed country |
+| `requires_attestation` | string[] | Rule skipped if provider lacks any listed attestation |
+| `requires_signed_response` | boolean | Rule skipped unless provider returns TG signed response |
+| `excludes` | string[] | Provider globs evaluated before positive criteria — matches cause skip |
+
+**Capability identifiers:** `text_generation`, `function_calling`, `vision`, `multimodal`, `structured_output`, `embedding`, `reranking`, `code_generation`, `reasoning`, `fine_tuning`
+
+**Attestation identifiers:** `soc2-type2`, `iso-27001`, `hipaa-baa`, `gdpr-dpa`, `fedramp-moderate`, `fedramp-high`, `pci-dss`, `hitrust`, `ccpa`
+
+Provider capabilities and attestations are resolved from the **TG Provider Registry** (see `registry/REGISTRY.md`). The registry ships embedded in the runtime and can be refreshed from the TG registry endpoint.
+
+---
+
+### 30.4 Tier 3 — Attestation and Signed-Response Gating
+
+Tier 3 overlaps with Tier 2 but is called out separately because it represents a trust gate rather than a capability filter: rules that must not fire unless the provider holds verifiable compliance certifications.
+
+```yaml
+- id: phi-only-attested-providers
+  stage: pre-request
+  action: enforce
+  enforce_type: provider_allowlist
+  provider_match:
+    requires_attestation: [hipaa-baa, soc2-type2]
+    blocked_training_jurisdictions: [CN, RU, BY, IR]
+  allowed_providers: ["any"]
+  on_violation: block
+```
+
+When `requires_attestation` is set and no registry entry is found for the provider (unknown provider), the rule is **skipped** (fail-open). This prevents unknown providers from blocking all evaluation. Pair this with a top-level `enforce_type: provider_allowlist` rule if you need fail-closed behavior for unknown providers.
+
+---
+
+### 30.5 Combining Tier 1 and Tier 2
+
+`providers` and `provider_match` can be set on the same rule. Both checks must pass for the rule to evaluate:
+
+```yaml
+- id: combined-example
+  stage: pre-request
+  action: redact
+  providers: [openai/*, anthropic/*]    # Tier 1: only these two families
+  provider_match:
+    capabilities: [vision]              # Tier 2: only vision-capable models within those families
+  targets:
+    - type: pii
+      categories: [phi]
+  on_violation: redact
+```
+
+---
+
+### 30.6 Audit Behavior
+
+When a rule is skipped due to provider scoping, the runtime emits an audit event with `event_type: allowed` and a detail field indicating the skip reason. These events are not counted as violations and do not increment threshold counters.
+
+---
+
+### 30.7 TG Provider Registry
+
+The TG Provider Registry (`registry/REGISTRY.md`, embedded in the runtime as `packages/runtime/src/registry/provider-registry.ts`) is an open, versioned catalog of AI model providers. It provides the capability and attestation data that Tier 2/3 matching relies on.
+
+Each provider entry includes:
+- `headquarters_jurisdiction` — ISO 3166-1 alpha-2 country
+- `training_jurisdictions` — where models are trained
+- `processing_regions` — available cloud regions
+- `capabilities` — capability flags
+- `risk_tier` — `low`, `medium`, `high`, or `critical`
+- `attestations` — compliance certifications held
+- Model-level overrides for heterogeneous model families
+
+The registry is open. Providers can submit entries via pull request. See `registry/REGISTRY.md` for the submission process.
+
+---
+
+## 31. Data Sovereignty
+
+### 31.1 Overview
+
+The existing `enforce_type: data_residency` from Section 11 enforces a single constraint: the processing region must be in an allowlist. Data sovereignty is a broader concept involving three distinct jurisdictional questions:
+
+1. **Subject jurisdiction** — where is the person whose data this is?
+2. **Processor jurisdiction** — where is the AI model processing it?
+3. **Training jurisdiction** — where was the model trained?
+
+Each of these has distinct legal significance under GDPR, CCPA, the EU AI Act, and emerging national AI laws. `enforce_type: data_sovereignty` addresses all three simultaneously.
+
+| Feature | `data_residency` | `data_sovereignty` |
+|---|---|---|
+| Allowed regions | ✓ | ✓ (`allowed_processor_regions`) |
+| Blocked jurisdictions | — | ✓ (`blocked_processor_jurisdictions`) |
+| Subject jurisdiction scoping | — | ✓ (`data_subject_jurisdiction`) |
+| Training jurisdiction blocking | — | ✓ (`blocked_training_jurisdictions`) |
+| Transfer mechanism verification | — | ✓ (`transfer_mechanism`) |
+| Legal basis tracking | — | ✓ (`legal_basis`) |
+| Full sovereignty audit trail | — | ✓ |
+
+`data_residency` remains valid and backward-compatible. For new deployments, `data_sovereignty` is the recommended approach.
+
+---
+
+### 31.2 Subject Jurisdiction
+
+`data_subject_jurisdiction` determines whose data this rule governs and how to identify them at runtime.
+
+```yaml
+data_subject_jurisdiction:
+  infer_from: geo_ip     # auto-detect from SDK geo middleware
+  accept: [EU, EEA, UK]  # only fire for EU/EEA/UK subjects
+  fallback: EU           # assume EU if geo-IP is unavailable
+```
+
+**infer_from values:**
+
+| Value | How it works |
+|---|---|
+| `geo_ip` | SDK geo middleware writes ISO-3166 country to `metadata.tg_geo_jurisdiction`. Also reads `cf-ipcountry` (Cloudflare) and `x-country-code`. |
+| `request_header` | Reads `X-TG-Subject-Jurisdiction` or `X-User-Jurisdiction` request header. |
+| `metadata` | Reads `metadata.tg_subject_jurisdiction` directly (set by application). |
+
+**accept values:** ISO 3166-1 alpha-2 country codes, or the shorthand values `EU` and `EEA` which expand to all EU/EEA member states. `UK` is always included separately (post-Brexit adequacy decision still in force).
+
+When the inferred subject jurisdiction is **not in the accept list**, the rule is **skipped**, not violated. This is by design — a rule scoped to EU data subjects should simply not fire for US data subjects, rather than blocking the call. Use separate rules for different subject populations.
+
+When `data_subject_jurisdiction` is omitted entirely, the rule fires for all requests regardless of subject jurisdiction.
+
+---
+
+### 31.3 Processor Jurisdiction
+
+The processor jurisdiction is the country where AI processing occurs — derived from the cloud region of the provider endpoint.
+
+```yaml
+allowed_processor_regions:
+  - eu-west-1
+  - eu-central-1
+  - europe-west-*         # GCP prefix wildcard
+
+blocked_processor_jurisdictions:
+  - CN    # China: PIPL + Data Security Law mandate government access
+  - RU    # Russia: Federal Law 242-FZ + sanctions
+  - BY    # Belarus: sanctions
+  - IR    # Iran: OFAC comprehensive sanctions
+```
+
+The runtime resolves the processor jurisdiction from `metadata.tg_region` or `metadata.tg_processor_region` using an embedded region→country mapping table covering all AWS, GCP, and Azure regions.
+
+**`blocked_processor_jurisdictions` takes precedence** over `allowed_processor_regions`. A region in a blocked jurisdiction causes a violation even if the region itself is in the allow list. This ensures sanctions compliance cannot be bypassed by specifying specific regions within a blocked country.
+
+The processor jurisdiction can also be set directly via `metadata.tg_processor_jurisdiction` (ISO 3166-1 alpha-2) for providers outside the embedded mapping table.
+
+---
+
+### 31.4 Training Jurisdiction
+
+```yaml
+blocked_training_jurisdictions: [CN, RU]
+```
+
+Blocks calls to any provider whose models were trained in the listed jurisdictions, per the TG Provider Registry. Under Chinese and Russian data laws, governments can compel AI companies to disclose training data and model weights. Even when inference occurs in an EU region, the legal jurisdiction over the model itself may remain with the country of origin.
+
+Training jurisdiction data comes from the TG Provider Registry (see Section 30.7). When the provider is not in the registry, `blocked_training_jurisdictions` evaluation is skipped. Pair with `enforce_type: provider_allowlist` for hard blocks on unknown providers.
+
+---
+
+### 31.5 Legal Transfer Mechanism
+
+When data flows from an EU/EEA subject to a processor outside the EEA, GDPR Article 46 requires a legal transfer mechanism. The `transfer_mechanism` field verifies that one is in place:
+
+```yaml
+transfer_mechanism:
+  require_one_of:
+    - adequacy_decision              # EU Commission Art. 45 adequacy
+    - standard_contractual_clauses   # EC-approved SCCs
+    - binding_corporate_rules        # Intra-group BCRs
+```
+
+**How transfer mechanisms are verified:**
+
+1. **adequacy_decision** — Resolved automatically from the TG Adequacy Decision table (embedded in the runtime). The table tracks all EU Commission decisions including the EU-US Data Privacy Framework (conditional adequacy). Intra-EEA transfers are always considered to have adequacy_decision.
+
+2. **standard_contractual_clauses / binding_corporate_rules** — Cannot be verified automatically (they are contracts). The application must assert the mechanism via `metadata.tg_transfer_mechanism = "standard_contractual_clauses"` or `"binding_corporate_rules"`. The runtime trusts this assertion and emits it in the audit trail.
+
+3. **derogation** — Use only for one-off transfers under GDPR Art. 49 (explicit consent, vital interests, public interest). Must be asserted via `metadata.tg_transfer_mechanism = "derogation"`.
+
+When no valid mechanism can be resolved and none is asserted in metadata, the rule is violated.
+
+**Adequacy Decision Table** — The embedded table (see `packages/runtime/src/registry/adequacy-decisions.ts`) covers:
+- Full adequacy: Andorra, Argentina, Faroe Islands, Guernsey, Israel, Isle of Man, Japan, Jersey, New Zealand, Republic of Korea, Switzerland, UK, Uruguay
+- Conditional adequacy: Canada (PIPEDA sector only), United States (DPF-certified organizations only)
+
+---
+
+### 31.6 Legal Basis
+
+```yaml
+legal_basis: gdpr_article_6_1_b
+```
+
+The `legal_basis` field is a machine-readable code emitted in every sovereignty audit event. It does not affect enforcement — it is metadata for regulators and DPO review.
+
+**Common values:**
+
+| Code | Meaning |
+|---|---|
+| `gdpr_article_6_1_a` | Consent |
+| `gdpr_article_6_1_b` | Contract performance |
+| `gdpr_article_6_1_c` | Legal obligation |
+| `gdpr_article_6_1_d` | Vital interests |
+| `gdpr_article_6_1_e` | Public task |
+| `gdpr_article_6_1_f` | Legitimate interests |
+| `gdpr_article_9_2_h` | Medical purposes (special category) |
+| `hipaa_treatment_payment_operations` | HIPAA TPO |
+| `ccpa_business_purpose` | CCPA business purpose |
+
+---
+
+### 31.7 Sovereignty Audit Events
+
+Every `data_sovereignty` rule evaluation emits an extended audit event with sovereignty-specific fields in the `tags` map:
+
+| Tag | Value |
+|---|---|
+| `subject_jurisdiction` | Inferred subject jurisdiction (ISO 3166-1) or `unknown` |
+| `processor_jurisdiction` | Resolved processor jurisdiction (ISO 3166-1) |
+| `processor_region` | Raw cloud region string (when available) |
+| `transfer_mechanism_used` | The mechanism that was satisfied, or absent if none was required |
+| `legal_basis` | The `legal_basis` code from the rule, if set |
+
+These fields are included on both allowed and blocked events, enabling post-hoc audit queries like "show me all calls where the processor was in jurisdiction X."
+
+---
+
+### 31.8 Complete Example
+
+```yaml
+- id: eu-gdpr-data-sovereignty
+  description: "Full GDPR Art. 46 sovereignty enforcement for EU/EEA/UK data subjects."
+  stage: pre-request
+  action: enforce
+  enforce_type: data_sovereignty
+
+  data_subject_jurisdiction:
+    infer_from: geo_ip
+    accept: [EU, EEA, UK]
+    fallback: EU
+
+  allowed_processor_regions:
+    - eu-west-1
+    - eu-west-2
+    - eu-west-3
+    - eu-central-1
+    - europe-west-*
+    - northeurope
+    - westeurope
+
+  blocked_processor_jurisdictions: [CN, RU, BY, IR]
+  blocked_training_jurisdictions: [CN]
+
+  transfer_mechanism:
+    require_one_of:
+      - adequacy_decision
+      - standard_contractual_clauses
+
+  legal_basis: gdpr_article_6_1_b
+  on_violation: block
+  log: true
+```
+
+A full working example with US HIPAA and multi-jurisdiction rules is in `examples/data-sovereignty.yaml`.
+
+---
+
+### 31.9 Relationship to data_residency
+
+`enforce_type: data_residency` from Section 11 remains fully supported and is backward-compatible. It continues to work using the `allowed_regions` field.
+
+`data_sovereignty` is the recommended approach for new deployments. The key differences:
+
+- `data_sovereignty` uses `allowed_processor_regions` instead of `allowed_regions` (semantically clearer)
+- `data_sovereignty` can also block by country code, not just by allowlisting regions
+- `data_sovereignty` adds training jurisdiction, transfer mechanism, subject scoping, and legal basis
+- `data_sovereignty` emits a richer audit trail
+
+Policy files can use both types simultaneously on different rules.
