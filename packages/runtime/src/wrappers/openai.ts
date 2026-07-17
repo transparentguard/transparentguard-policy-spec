@@ -20,12 +20,18 @@ import type {
   RequestPayload,
   ResponsePayload,
   Message,
+  TPSPolicy,
 } from "../types.js";
 import type { LicenseStatus } from "../license/checker.js";
 import { evaluate } from "../engine.js";
 import { AuditEmitter } from "../audit/emitter.js";
 import { TransparentGuardError } from "../license/checker.js";
-import type { TPSPolicy } from "../types.js";
+import {
+  resolveStreamConfig,
+  evaluateWindowedStream,
+  evaluatePassthroughStream,
+} from "../streaming/stream-evaluator.js";
+import type { StreamChunkAdapter } from "../streaming/stream-evaluator.js";
 
 // ---------------------------------------------------------------------------
 // Minimal OpenAI type surface — avoids requiring openai as a peer dep at compile time
@@ -258,12 +264,92 @@ export class WrappedOpenAIClient {
     originalParams: OpenAIChatCompletionCreateParams,
     evalOptions: EvaluateOptions,
   ): Promise<AsyncGenerator<OpenAIChatCompletionChunk>> {
-    // Buffer mode: collect all streaming chunks, evaluate, then re-yield as async generator.
-    // This gives full post-response coverage at the cost of delaying first-token.
-    // For window or passthrough mode, callers can use the runtime evaluate() API directly.
-    const streamParams = { ...redactedParams, stream: true as const };
-    const stream = await (this.inner.chat.completions.create(streamParams) as unknown as Promise<AsyncIterable<OpenAIChatCompletionChunk>>);
+    const streamCfg = resolveStreamConfig(this.policy, evalOptions);
 
+    const streamParams = { ...redactedParams, stream: true as const };
+    const stream = await (
+      this.inner.chat.completions.create(streamParams) as unknown as Promise<
+        AsyncIterable<OpenAIChatCompletionChunk>
+      >
+    );
+
+    // ── Buffer mode (default) ──────────────────────────────────────────────
+    if (streamCfg.mode === "buffer") {
+      return this.bufferModeStream(stream, originalParams, evalOptions);
+    }
+
+    // ── OpenAI chunk adapter shared by window + passthrough modes ──────────
+    const systemPrompt =
+      originalParams.messages.find((m) => m.role === "system")?.content ?? undefined;
+
+    const adapter: StreamChunkAdapter<OpenAIChatCompletionChunk> = {
+      getContent: (c) => c.choices[0]?.delta?.content ?? null,
+      getModel: (c) => c.model || undefined,
+      isFinish: (c) => c.choices[0]?.finish_reason != null,
+      makePayload: (content, model): ResponsePayload => ({
+        content,
+        provider: `openai/${model}`,
+        model,
+        api_key_id: evalOptions.apiKeyId,
+        system_prompt: systemPrompt,
+      }),
+      makeAbortChunk: (detail, template) => ({
+        ...template,
+        choices: [
+          {
+            delta: { role: "assistant", content: `\n[STREAM ABORTED: ${detail}]` },
+            finish_reason: "stop",
+            index: 0,
+          },
+        ],
+      }),
+      makeRedactedChunk: (content, template) => ({
+        ...template,
+        choices: [
+          {
+            delta: { role: "assistant", content },
+            finish_reason: "stop",
+            index: 0,
+          },
+        ],
+      }),
+    };
+
+    // ── Window mode ────────────────────────────────────────────────────────
+    if (streamCfg.mode === "window") {
+      return Promise.resolve(
+        evaluateWindowedStream(
+          stream,
+          adapter,
+          this.policy,
+          this.license,
+          evalOptions,
+          streamCfg,
+          this.emitter,
+        ),
+      );
+    }
+
+    // ── Passthrough mode ───────────────────────────────────────────────────
+    return Promise.resolve(
+      evaluatePassthroughStream(
+        stream,
+        adapter,
+        this.policy,
+        this.license,
+        evalOptions,
+        streamCfg,
+        this.emitter,
+      ),
+    );
+  }
+
+  /** Buffer mode: collect all chunks, evaluate full response, then re-yield. */
+  private async bufferModeStream(
+    stream: AsyncIterable<OpenAIChatCompletionChunk>,
+    originalParams: OpenAIChatCompletionCreateParams,
+    evalOptions: EvaluateOptions,
+  ): Promise<AsyncGenerator<OpenAIChatCompletionChunk>> {
     const chunks: OpenAIChatCompletionChunk[] = [];
     let fullContent = "";
     let lastChunk: OpenAIChatCompletionChunk | undefined;
@@ -276,8 +362,9 @@ export class WrappedOpenAIClient {
     }
 
     if (!lastChunk) {
-      // Empty stream — return empty generator
-      return (async function* () { /* empty */ })();
+      return (async function* () {
+        /* empty stream */
+      })();
     }
 
     const responsePayload: ResponsePayload = {
@@ -285,7 +372,8 @@ export class WrappedOpenAIClient {
       provider: `openai/${lastChunk.model}`,
       model: lastChunk.model,
       api_key_id: evalOptions.apiKeyId,
-      system_prompt: originalParams.messages.find((m) => m.role === "system")?.content ?? undefined,
+      system_prompt:
+        originalParams.messages.find((m) => m.role === "system")?.content ?? undefined,
     };
 
     const postResult = await evaluate(
@@ -305,29 +393,29 @@ export class WrappedOpenAIClient {
         violation?.detail ?? "Response blocked by TransparentGuard policy.",
         "policy_violation",
       );
-      // Return a generator that immediately throws
-      return (async function* () { throw err; })();
+      return (async function* () {
+        throw err;
+      })();
     }
 
     const finalPayload = postResult.payload as ResponsePayload;
     const finalContent = finalPayload.content;
     void this.emitter.flush();
 
-    // Re-yield: if content was redacted, yield a single synthetic chunk with the redacted content.
-    // Otherwise yield all original chunks as-is.
     const contentWasModified = finalContent !== fullContent;
     const chunksToYield = chunks;
 
     return (async function* () {
       if (contentWasModified && chunksToYield.length > 0) {
-        // Yield a single synthetic chunk with the redacted/modified full content
         const syntheticChunk: OpenAIChatCompletionChunk = {
           ...chunksToYield[0]!,
-          choices: [{
-            delta: { role: "assistant", content: finalContent },
-            finish_reason: "stop",
-            index: 0,
-          }],
+          choices: [
+            {
+              delta: { role: "assistant", content: finalContent },
+              finish_reason: "stop",
+              index: 0,
+            },
+          ],
         };
         yield syntheticChunk;
       } else {
