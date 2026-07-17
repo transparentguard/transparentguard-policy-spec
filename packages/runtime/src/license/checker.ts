@@ -50,6 +50,7 @@ const VALID_FEATURES = new Set([
   "compliance_frameworks", "audit_s3", "audit_postgres", "audit_gcs",
   "audit_azure", "policy_registry", "oem_embed", "fedramp",
   "trust_chain", "pie", "audit_chain_integrity", "threshold_notifications",
+  "custom_classifier_training",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,8 @@ export type LicenseFeature =
   | "trust_chain"
   | "pie"
   | "audit_chain_integrity"
-  | "threshold_notifications";
+  | "threshold_notifications"
+  | "custom_classifier_training";
 
 export class TransparentGuardError extends Error {
   constructor(
