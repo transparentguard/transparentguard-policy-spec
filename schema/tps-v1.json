@@ -171,6 +171,12 @@
           "type": "string",
           "description": "Behavior when a request targets a provider not in the policy provider list.",
           "enum": ["block", "warn", "allow"]
+        },
+        "fail_mode": {
+          "type": "string",
+          "description": "Controls TransparentGuard's behavior when the policy engine itself encounters an unexpected error (network failure, unhandled exception, etc.) — distinct from a policy violation.\n\n'closed' (default): Block the request when TG cannot evaluate it. Safer for compliance-critical environments; may impact uptime during TG outages.\n\n'open': Pass the request through when TG errors, with the error logged as an audit event. Better uptime; weaker guarantees.\n\nPer-environment fail_mode overrides the policy-level fail_mode.",
+          "enum": ["open", "closed"],
+          "default": "closed"
         }
       },
       "not": {
