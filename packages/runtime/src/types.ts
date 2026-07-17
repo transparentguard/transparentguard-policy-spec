@@ -20,6 +20,17 @@ export type ComplianceFramework =
 export interface TPSEnvironment {
   name: string;
   strict?: boolean;
+  /**
+   * Fail-open / fail-closed behaviour when TransparentGuard itself errors
+   * (network failure, unexpected exception, etc.) — NOT triggered by policy violations.
+   *
+   * "closed" (default) — block the request when TG cannot evaluate it (safer; may impact uptime).
+   * "open"             — pass the request through with a logged error event (better uptime; weaker guarantees).
+   *
+   * Per-environment setting overrides the policy-level fail_mode.
+   * Recommended: "closed" in production HIPAA/FedRAMP, "open" in staging with heavy audit logging.
+   */
+  fail_mode?: "open" | "closed";
   active_rules?: string[];
   disabled_rules?: string[];
   on_unknown_provider?: "block" | "warn" | "allow";
@@ -143,10 +154,24 @@ export interface TransferMechanismConfig {
 
 export type OnViolation = "block" | "redact" | "warn" | "log" | "allow";
 
+// ---------------------------------------------------------------------------
+// Streaming mode types (Phase 10 — Section 25)
+// ---------------------------------------------------------------------------
+
+/** Controls how a streaming response is evaluated against policy rules. */
+export type StreamMode = "buffer" | "window" | "passthrough";
+
+/**
+ * What to do when a policy violation is detected mid-stream.
+ * "block"               — abort the stream (throw TransparentGuardError)
+ * "passthrough_and_log" — log the violation in the audit trail; do not abort
+ */
+export type OnStreamViolation = "block" | "passthrough_and_log";
+
 export interface RuleStreaming {
-  mode: "buffer" | "window" | "passthrough";
+  mode: StreamMode;
   window_tokens?: number;
-  on_stream_violation?: "block" | "passthrough_and_log";
+  on_stream_violation?: OnStreamViolation;
 }
 
 export interface TPSRule {
@@ -222,9 +247,9 @@ export interface AuditNotify {
 
 /** Global default streaming config for audit — per-rule streaming overrides this */
 export interface AuditStreamingConfig {
-  mode: "buffer" | "window" | "passthrough";
+  mode: StreamMode;
   window_tokens?: number;
-  on_stream_violation?: "block" | "passthrough_and_log";
+  on_stream_violation?: OnStreamViolation;
 }
 
 export interface AuditChainIntegrity {
@@ -382,6 +407,12 @@ export interface TPSPolicy {
   description?: string;
   extends?: string;
   default_action?: "allow" | "deny";
+  /**
+   * Global fail-open / fail-closed default (Section 3a — Phase 10).
+   * Per-environment fail_mode overrides this value.
+   * "closed" is the default when neither the environment nor policy specifies fail_mode.
+   */
+  fail_mode?: "open" | "closed";
   provider?: "any" | string[];
   environments?: TPSEnvironment[];
   rules: TPSRule[];
@@ -590,6 +621,16 @@ export interface EvaluateOptions {
   apiKey?: string;
   /** When false, skips receipt generation for this call. Default: true */
   generateReceipt?: boolean;
+  // ── Streaming overrides (Phase 10 / Section 25) ─────────────────────────
+  /**
+   * Override the streaming evaluation mode for this specific call.
+   * Defaults to policy.audit.streaming?.mode ?? "buffer".
+   */
+  streamMode?: StreamMode;
+  /** Override the window token size (window mode only). */
+  windowTokens?: number;
+  /** Override the violation action for streaming evaluation. */
+  onStreamViolation?: OnStreamViolation;
 }
 
 // ---------------------------------------------------------------------------
