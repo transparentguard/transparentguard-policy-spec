@@ -240,7 +240,33 @@ export class AuditEmitter {
   constructor(audit: TPSAudit, licenseFeatures: string[] = []) {
     this.audit = audit;
     this.licenseFeatures = licenseFeatures;
+    this.validateDestinationLicense(); // Gate 2: audit destination feature check
     this.initChain();
+  }
+
+  /**
+   * Gate 2: throws immediately if the configured audit destination requires a
+   * license feature the current key does not include. Runs at construction time
+   * so misconfigured policies are rejected before any evaluation begins.
+   */
+  private validateDestinationLicense(): void {
+    const dest = this.audit.destination;
+    if (!dest) return;
+    const checks: Array<[string, string, string]> = [
+      ["s3://",          "audit_s3",       "S3 audit destinations"],
+      ["postgres://",    "audit_postgres",  "PostgreSQL audit destinations"],
+      ["postgresql://",  "audit_postgres",  "PostgreSQL audit destinations"],
+      ["gcs://",         "audit_gcs",       "GCS audit destinations"],
+      ["azure://",       "audit_azure",     "Azure audit destinations"],
+    ];
+    for (const [scheme, feature, label] of checks) {
+      if (dest.startsWith(scheme) && !this.licenseFeatures.includes(feature)) {
+        throw new Error(
+          `[TransparentGuard] ${label} require the ${feature} license feature ` +
+          `(Startup tier or above). Upgrade at transparentguard.dev.`,
+        );
+      }
+    }
   }
 
   private initChain(): void {
@@ -248,11 +274,11 @@ export class AuditEmitter {
     if (!ci?.enabled) return;
     // Chain integrity requires audit_chain_integrity license feature (Startup tier and above)
     if (!this.licenseFeatures.includes("audit_chain_integrity")) {
-      console.warn(
-        "[TransparentGuard] audit.chain_integrity requires the audit_chain_integrity license feature. " +
-          "Upgrade to Startup tier or above. Chain integrity has been disabled for this session.",
+      // Gate 2 (hard): chain integrity silently disabled is exploitable — throw instead
+      throw new Error(
+        "[TransparentGuard] audit.chain_integrity requires the audit_chain_integrity license feature " +
+        "(Startup tier or above). Upgrade at transparentguard.dev.",
       );
-      return;
     }
 
     if (ci.sidecar_path) {
