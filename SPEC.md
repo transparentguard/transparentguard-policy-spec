@@ -451,6 +451,39 @@ environments:
 
 Overrides the default behavior when a request targets a provider not in the policy's `provider` list. Useful when you want to warn but not block in production, or allow in dev without disabling strict mode.
 
+#### fail_mode
+
+**Type:** string  
+**Required:** No  
+**Default:** `"closed"`  
+**Valid values:** `"open"`, `"closed"`  
+
+Controls TransparentGuard's behaviour when the policy **engine itself** encounters an unexpected error — a network failure reaching a remote classifier, an unhandled exception inside the runtime, a temporary disk error reading the audit log — and can no longer reliably evaluate the policy. This field governs the fail-safe posture and is **not** triggered by a policy violation (a rule that blocks a request never uses fail_mode; that is normal enforcement).
+
+**"closed" (default):** Block the request or response when TG cannot evaluate it. The call fails with a `TransparentGuardError` and the upstream API is never reached (or the response is never forwarded). Appropriate for production environments where a brief processing error is safer than an unaudited pass-through.
+
+**"open":** Pass the call through when TG errors. An `error` audit event is emitted with the exception details. The consumer receives the upstream response as if no policy were in place for that call. Appropriate for non-critical environments, development, or when the LLM integration requires maximum uptime and the compliance team accepts the audit trail as compensation.
+
+A per-environment `fail_mode` overrides the policy-level `fail_mode`. The resolution order is: environment-level → policy-level → `"closed"`.
+
+```yaml
+# Policy-level default: fail-closed everywhere
+fail_mode: "closed"
+
+environments:
+  - name: production
+    strict: true
+    # Inherits policy-level "closed" — safest for HIPAA/FedRAMP
+  - name: staging
+    strict: false
+    fail_mode: "open"  # Staging: prefer uptime, accept audit risk
+  - name: dev
+    strict: false
+    fail_mode: "open"
+```
+
+**Recommendation:** Use `fail_mode: "closed"` in all production environments subject to HIPAA, FedRAMP, or GDPR. Use `fail_mode: "open"` in staging and development if deployment outages outweigh the audit risk for that environment.
+
 ---
 
 ## 6. The rules Section
@@ -2078,7 +2111,12 @@ When a violation is detected in window mode and `on_stream_violation: block`, th
 data: {"tg_stream_terminated":true,"reason":"policy_violation","rule_id":"redact-pii-inbound"}
 ```
 
-**passthrough mode:** The rule is not applied to streaming responses at all. The stream is forwarded directly to the application without evaluation. A `sampled_out` audit event is emitted recording that the rule was intentionally bypassed. Use only for rules where post-hoc logging is sufficient and real-time enforcement is not required.
+**passthrough mode:** Every chunk is forwarded to the application immediately as it arrives. The runtime simultaneously accumulates all content. After the stream completes, the full assembled content is evaluated against post-response rules. If a violation is detected:
+
+- With `on_stream_violation: block`: A synthetic abort event is appended to the stream and `TransparentGuardError` is thrown. The consumer has already received all tokens; it MUST check for the abort event and discard the content.
+- With `on_stream_violation: passthrough_and_log`: The violation is recorded in the audit trail only; the consumer keeps all tokens.
+
+Because passthrough mode cannot retract tokens already delivered, **it cannot redact content**. Use passthrough only when post-hoc audit logging of violations is sufficient for the compliance posture. PII redaction rules on streaming responses MUST NOT use passthrough mode.
 
 ### 25.3 Window Size Guidance
 
@@ -3458,3 +3496,108 @@ A full working example with US HIPAA and multi-jurisdiction rules is in `example
 - `data_sovereignty` emits a richer audit trail
 
 Policy files can use both types simultaneously on different rules.
+
+---
+
+## 32. Provider Adapter Interface
+
+### 32.1 Overview
+
+A **ProviderAdapter** is a normalisation bridge between a provider's HTTP API wire format and the TPS canonical `RequestPayload` / `ResponsePayload` model. The runtime uses adapters to:
+
+1. **Normalise** incoming provider-format requests and responses into TPS payloads for rule evaluation.
+2. **Denormalise** TPS payloads (potentially modified by redaction) back into the provider's wire format for forwarding.
+3. **Carry metadata** (cloud regions, jurisdictions, capabilities) consumed by provider scoping (Section 30) and data sovereignty enforcement (Section 31).
+
+Adapters are not policy constructs — they do not appear in policy YAML files. They are a runtime implementation contract that operator-provided or community-contributed code must satisfy to plug new providers into the TG proxy.
+
+### 32.2 Interface Fields
+
+```typescript
+interface ProviderAdapter {
+  // Identity
+  readonly providerId: string;         // "openai" — prefix segment of "openai/gpt-4o"
+  readonly displayName: string;        // "OpenAI"
+  readonly isOpenAICompat: boolean;    // True → shares OpenAI wrapper logic
+
+  // Authentication
+  readonly auth: {
+    headerName: string;          // e.g. "Authorization", "x-api-key"
+    headerFormat: string;        // e.g. "Bearer {key}" — {key} is placeholder
+    additionalHeaders?: Record<string, string>;  // Static extra headers
+  };
+
+  // Region / jurisdiction (used by data_sovereignty)
+  readonly region: {
+    regions: readonly string[];          // Cloud region IDs where data is processed
+    jurisdiction: string;                // ISO 3166-1 alpha-2 primary jurisdiction
+    trainingJurisdiction: string;        // ISO 3166-1 alpha-2 training jurisdiction
+  };
+
+  // Capabilities (used by provider_match in Section 30)
+  readonly capabilities: readonly string[];
+
+  // Normalisation
+  normalizeRequest(raw: Record<string, unknown>): RequestPayload;
+  denormalizeRequest(payload: RequestPayload, original: Record<string, unknown>): Record<string, unknown>;
+  normalizeResponse(raw: Record<string, unknown>, model: string): ResponsePayload;
+  denormalizeResponse(payload: ResponsePayload, original: Record<string, unknown>): Record<string, unknown>;
+}
+```
+
+### 32.3 Built-in Adapters
+
+The runtime ships with adapters for the following providers:
+
+| Provider ID  | Display Name          | OpenAI-compat | Jurisdiction | Notes |
+|--------------|-----------------------|:-------------:|:------------:|-------|
+| `openai`     | OpenAI                | Yes           | US           | Reference implementation |
+| `anthropic`  | Anthropic             | No            | US           | Messages API; system field separate |
+| `groq`       | Groq                  | Yes           | US           | Delegates to OpenAI normaliser |
+| `vertex`     | Google Vertex AI      | No            | US           | generateContent format; `contents[]` |
+| `mistral`    | Mistral AI            | Yes           | FR           | EU jurisdiction |
+| `vllm`       | vLLM (self-hosted)    | Yes           | self-hosted  | Jurisdiction overrideable at runtime |
+| `bedrock`    | AWS Bedrock           | No            | US           | Converse API; `output.message.content[]` |
+| `deepseek`   | DeepSeek              | Yes           | CN           | Data processed in China |
+| `moonshot`   | Moonshot AI (Kimi)    | Yes           | CN           | Data processed in China |
+| `zhipu`      | Zhipu AI (GLM)        | Yes           | CN           | JWT auth; data processed in China |
+| `baichuan`   | Baichuan AI           | Yes           | CN           | Data processed in China |
+
+Providers with `Jurisdiction: CN` are blocked by policies using `blocked_processor_jurisdictions: [CN]` in `enforce_type: data_sovereignty` rules.
+
+### 32.4 Adapter Resolution
+
+Adapters are resolved from a TPS provider string using the prefix segment before the first `/`:
+
+```
+"openai/gpt-4o"    → openai adapter
+"groq/llama-3-70b" → groq adapter
+"vertex/gemini-1.5-pro" → vertex adapter
+```
+
+### 32.5 Registering Community Adapters
+
+```typescript
+import { registerAdapter } from "@transparentguard/runtime";
+
+registerAdapter({
+  providerId: "myco",
+  displayName: "MyCo LLM API",
+  isOpenAICompat: false,
+  auth: { headerName: "x-myco-key", headerFormat: "{key}" },
+  region: { regions: ["us-west-2"], jurisdiction: "US", trainingJurisdiction: "US" },
+  capabilities: ["chat", "streaming"],
+  normalizeRequest(raw) { /* ... */ },
+  denormalizeRequest(payload, original) { /* ... */ },
+  normalizeResponse(raw, model) { /* ... */ },
+  denormalizeResponse(payload, original) { /* ... */ },
+});
+```
+
+`registerAdapter()` replaces any previously registered adapter with the same `providerId`. Call it once at process startup before initialising the TG runtime.
+
+### 32.6 vLLM Jurisdiction Override
+
+The `vllm` adapter sets `jurisdiction: "self-hosted"` and `region: ["self-hosted"]` because the deployment location is operator-controlled. When operating behind a data sovereignty policy with `blocked_processor_jurisdictions`, the proxy SHOULD register a custom vLLM adapter at startup that sets the actual deployment region and jurisdiction. The `"self-hosted"` sentinel bypasses all jurisdiction checks.
+
+---
