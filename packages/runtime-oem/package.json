@@ -26,7 +26,7 @@
     "typescript": "~5.9.3"
   },
   "engines": { "node": ">=18.0.0" },
-  "license": "MIT",
+  "license": "MIT WITH Commons-Clause",
   "repository": {
     "type": "git",
     "url": "https://github.com/transparentguard/runtime"
