@@ -8,6 +8,8 @@
  */
 
 import type { ProviderAdapter } from "./adapter.js";
+import { assertFeature } from "../license/checker.js";
+import type { LicenseStatus } from "../license/checker.js";
 import { openAIAdapter } from "./openai.js";
 import { anthropicAdapter } from "./anthropic.js";
 import { groqAdapter } from "./groq.js";
@@ -61,7 +63,11 @@ seed(baichuanAdapter);
  * });
  * ```
  */
-export function registerAdapter(adapter: ProviderAdapter): void {
+export function registerAdapter(adapter: ProviderAdapter, license?: LicenseStatus): void {
+  // Gate 2: custom adapters require Growth tier. Pass your LicenseStatus to enforce.
+  if (license !== undefined) {
+    assertFeature(license, "custom_adapter", "Custom provider adapters (registerAdapter)");
+  }
   ADAPTER_REGISTRY.set(adapter.providerId.toLowerCase(), adapter);
 }
 
