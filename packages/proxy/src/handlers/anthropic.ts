@@ -192,8 +192,11 @@ export async function handleAnthropic(
               .filter((c) => c.type === "text")
               .map((c) => c.text ?? "")
               .join("");
-          } catch {
-            // Pass through unparseable response
+          } catch (parseErr: unknown) {
+            // Response body was not valid JSON — pass through as-is
+            console.warn(
+              `[TransparentGuard] Anthropic post-response parse failed (passing through): ${String(parseErr)}`,
+            );
           }
         }
 
