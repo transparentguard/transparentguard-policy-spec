@@ -1,6 +1,6 @@
 MIT License with Commons Clause
 
-Copyright (c) 2024 TransparentGuard, Inc.
+Copyright (c) 2024 SLS Research & Technology
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -36,7 +36,7 @@ commercial uses that are not granted by the MIT License alone.
    artifacts, documentation, configuration files, and example code distributed
    in this repository or any derivative distribution thereof.
 
-   "Licensor" means TransparentGuard, Inc.
+   "Licensor" means SLS Research & Technology
 
    "You" means the individual or legal entity exercising rights under this
    License.
@@ -65,14 +65,14 @@ commercial uses that are not granted by the MIT License alone.
    (c) Offering the Software, or a derivative or rebranded version of it, as a
        white-label or OEM product to any third party for resale, redistribution,
        or sub-licensing, without a separate written OEM agreement executed with
-       TransparentGuard, Inc.;
+       SLS Research & Technology;
 
    (d) Providing consulting, implementation, integration, or support services
        to third parties where the primary deliverable is a deployment of the
        Software or a system substantially powered by the Software, and where
        those services are rendered for a fee exceeding USD $5,000 in aggregate
        per client engagement, without a separate written partner agreement
-       executed with TransparentGuard, Inc.;
+       executed with SLS Research & Technology;
 
    (e) Building or operating a competing AI policy enforcement, LLM proxy,
        prompt compliance, or AI governance product or service — whether
@@ -100,7 +100,7 @@ commercial uses that are not granted by the MIT License alone.
    to you, the right to Sell the Software as defined in Section 1.
 
    Any use that constitutes "Sell" under Section 1 requires a separate
-   commercial license agreement with TransparentGuard, Inc. To obtain a
+   commercial license agreement with SLS Research & Technology To obtain a
    commercial license, contact: pandauralabs@mail.com
 
 3. WHAT IS PERMITTED WITHOUT A COMMERCIAL LICENSE
@@ -146,12 +146,12 @@ commercial uses that are not granted by the MIT License alone.
 
    (c) Not use the name "TransparentGuard," the TransparentGuard logo, or any
        confusingly similar name or mark in a way that implies endorsement,
-       sponsorship, or official affiliation with TransparentGuard, Inc., without
+       sponsorship, or official affiliation with SLS Research & Technology, without
        prior written consent.
 
 5. COMMERCIAL LICENSING
 
-   TransparentGuard, Inc. offers commercial licenses that unlock the full
+   SLS Research & Technology offers commercial licenses that unlock the full
    capabilities of the Software — including managed hosting, OEM embedding,
    white-labeling, and partner reseller rights — under the following tiers:
 
@@ -167,7 +167,7 @@ commercial uses that are not granted by the MIT License alone.
 
    Any use of the Software that violates this Commons Clause addendum is
    outside the scope of the License granted herein and constitutes copyright
-   infringement under applicable law. TransparentGuard, Inc. reserves all
+   infringement under applicable law. SLS Research & Technology reserves all
    rights to enforce this License, seek injunctive relief, and pursue all
    available legal remedies for unauthorized commercial use.
 
