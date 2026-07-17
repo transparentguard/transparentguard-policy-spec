@@ -239,7 +239,7 @@ Framework rules run in addition to your declared rules and use the reserved `tg_
 | Key rotation watcher | — | — | — | ✅ | ✅ |
 | Custom classifier registry | — | — | — | — | ✅ |
 
-Get an API key at [transparentguard.com](https://transparentguard.com).
+Get an API key at [transparentguard.dev](https://transparentguard.dev).
 
 ---
 
