@@ -202,7 +202,7 @@ export interface TrainingJob {
  */
 export interface SLSAProvenance {
   /** SLSA build type URI. */
-  build_type: "https://transparentguard.com/slsa/training/v1";
+  build_type: "https://transparentguard.dev/slsa/training/v1";
   /** Provenance compliance level. */
   provenance_level: "SLSA_L1" | "SLSA_L2";
   /** Subject: the model artifact being attested. */
