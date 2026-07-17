@@ -24,6 +24,12 @@ import type { LicenseStatus } from "../license/checker.js";
 import { evaluate } from "../engine.js";
 import { AuditEmitter } from "../audit/emitter.js";
 import { TransparentGuardError } from "../license/checker.js";
+import {
+  resolveStreamConfig,
+  evaluateWindowedStream,
+  evaluatePassthroughStream,
+} from "../streaming/stream-evaluator.js";
+import type { StreamChunkAdapter } from "../streaming/stream-evaluator.js";
 
 // ---------------------------------------------------------------------------
 // Minimal Anthropic type surface
@@ -256,16 +262,103 @@ export class WrappedAnthropicClient {
     originalParams: AnthropicCreateParams,
     evalOptions: EvaluateOptions,
   ): Promise<AsyncGenerator<AnthropicStreamEvent>> {
-    const streamParams = { ...redactedParams, stream: true as const };
-    const stream = await (this.inner.messages.create(streamParams) as unknown as Promise<AsyncIterable<AnthropicStreamEvent>>);
+    const streamCfg = resolveStreamConfig(this.policy, evalOptions);
 
+    const streamParams = { ...redactedParams, stream: true as const };
+    const stream = await (
+      this.inner.messages.create(streamParams) as unknown as Promise<
+        AsyncIterable<AnthropicStreamEvent>
+      >
+    );
+
+    // ── Buffer mode (default) ──────────────────────────────────────────────
+    if (streamCfg.mode === "buffer") {
+      return this.bufferModeStream(stream, originalParams, evalOptions);
+    }
+
+    // ── Anthropic event adapter shared by window + passthrough modes ───────
+    const adapter: StreamChunkAdapter<AnthropicStreamEvent> = {
+      getContent: (e) =>
+        e.type === "content_block_delta" &&
+        e.delta?.type === "text_delta" &&
+        typeof e.delta.text === "string"
+          ? e.delta.text
+          : null,
+      getModel: (e) =>
+        e.type === "message_start" && e.message?.model
+          ? e.message.model
+          : undefined,
+      isFinish: (e) => e.type === "message_stop",
+      makePayload: (content, model): ResponsePayload => ({
+        content,
+        provider: `anthropic/${model}`,
+        model,
+        api_key_id: evalOptions.apiKeyId,
+        system_prompt: originalParams.system,
+      }),
+      makeAbortChunk: (detail, _template) =>
+        ({
+          type: "content_block_delta",
+          index: 0,
+          delta: {
+            type: "text_delta",
+            text: `\n[STREAM ABORTED: ${detail}]`,
+          },
+        }) as AnthropicStreamEvent,
+      makeRedactedChunk: (content, _template) =>
+        ({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: content },
+        }) as AnthropicStreamEvent,
+    };
+
+    // ── Window mode ────────────────────────────────────────────────────────
+    if (streamCfg.mode === "window") {
+      return Promise.resolve(
+        evaluateWindowedStream(
+          stream,
+          adapter,
+          this.policy,
+          this.license,
+          evalOptions,
+          streamCfg,
+          this.emitter,
+        ),
+      );
+    }
+
+    // ── Passthrough mode ───────────────────────────────────────────────────
+    return Promise.resolve(
+      evaluatePassthroughStream(
+        stream,
+        adapter,
+        this.policy,
+        this.license,
+        evalOptions,
+        streamCfg,
+        this.emitter,
+      ),
+    );
+  }
+
+  /** Buffer mode: collect all events, evaluate full response, then re-yield. */
+  private async bufferModeStream(
+    stream: AsyncIterable<AnthropicStreamEvent>,
+    originalParams: AnthropicCreateParams,
+    evalOptions: EvaluateOptions,
+  ): Promise<AsyncGenerator<AnthropicStreamEvent>> {
     const events: AnthropicStreamEvent[] = [];
     let fullText = "";
     let finalMessage: AnthropicResponse | undefined;
 
     for await (const event of stream) {
       events.push(event);
-      if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta?.type === "text_delta" &&
+        event.delta.text
+      ) {
         fullText += event.delta.text;
       }
       if (event.type === "message_stop" && event.message) {
@@ -273,7 +366,7 @@ export class WrappedAnthropicClient {
       }
     }
 
-    const model = finalMessage?.model ?? redactedParams.model;
+    const model = finalMessage?.model ?? originalParams.model;
 
     const responsePayload: ResponsePayload = {
       content: fullText,
@@ -304,7 +397,9 @@ export class WrappedAnthropicClient {
         violation?.detail ?? "Response blocked by TransparentGuard policy.",
         "policy_violation",
       );
-      return (async function* () { throw err; })();
+      return (async function* () {
+        throw err;
+      })();
     }
 
     const finalPayload = postResult.payload as ResponsePayload;
@@ -316,7 +411,6 @@ export class WrappedAnthropicClient {
 
     return (async function* () {
       if (contentModified) {
-        // Yield a synthetic text delta with the redacted content
         yield {
           type: "content_block_delta",
           index: 0,
