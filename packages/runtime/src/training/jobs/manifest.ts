@@ -36,7 +36,7 @@ export function buildProvenance(
   tags: Record<string, string> = {},
 ): SLSAProvenance {
   return {
-    build_type: "https://transparentguard.com/slsa/training/v1",
+    build_type: "https://transparentguard.dev/slsa/training/v1",
     provenance_level: "SLSA_L2",
     subject: {
       name: `tg-model:${job.classifier_name}@${modelManifest.version}`,
