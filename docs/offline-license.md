@@ -1,6 +1,6 @@
 # Offline License
 
-Air-gapped enterprise deployments — FedRAMP, ITAR, classified environments — use an offline license key. The runtime validates the key locally with HMAC-SHA256 and never contacts `api.transparentguard.com`. Keys are validated in under 1ms — no latency impact on request paths.
+Air-gapped enterprise deployments — FedRAMP, ITAR, classified environments — use an offline license key. The runtime validates the key locally with HMAC-SHA256 and never contacts `api.transparentguard.dev`. Keys are validated in under 1ms — no latency impact on request paths.
 
 ---
 
