@@ -17,9 +17,9 @@ import type {
   StreamMode,
   OnStreamViolation,
 } from "../types.js";
+import { assertFeature, TransparentGuardError } from "../license/checker.js";
 import type { LicenseStatus } from "../license/checker.js";
 import { evaluate } from "../engine.js";
-import { TransparentGuardError } from "../license/checker.js";
 import type { AuditEmitter } from "../audit/emitter.js";
 import { approximateTokenCount } from "../enforcements/token-budget.js";
 
@@ -112,6 +112,8 @@ export async function* evaluateWindowedStream<C>(
   config: StreamEvalConfig,
   emitter: AuditEmitter,
 ): AsyncGenerator<C> {
+  // Gate 2: window mode is a Startup+ feature; buffer mode is always available
+  assertFeature(license, "streaming_window", "Streaming window mode");
   let accumulated = "";
   let windowTokenCount = 0;
   let windowChunks: C[] = [];
@@ -206,6 +208,8 @@ export async function* evaluatePassthroughStream<C>(
   config: StreamEvalConfig,
   emitter: AuditEmitter,
 ): AsyncGenerator<C> {
+  // Gate 2: passthrough mode shares the streaming_window feature gate (Startup tier and above)
+  assertFeature(license, "streaming_window", "Streaming passthrough mode");
   let accumulated = "";
   let model = "";
   let firstChunk: C | undefined;
