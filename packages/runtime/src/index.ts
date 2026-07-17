@@ -84,6 +84,9 @@ export type {
   AuditNotify,
   AuditStreamingConfig,
   AuditChainIntegrity,
+  // Streaming (Phase 10)
+  StreamMode,
+  OnStreamViolation,
   // Payload types
   Message,
   RequestPayload,
@@ -164,6 +167,45 @@ export {
   findPublicKey,
 } from "./trust/keys.js";
 export type { JwkPublicKey, KeySet } from "./trust/keys.js";
+
+// ---------------------------------------------------------------------------
+// Phase 10 — Streaming Enforcement Engine (Section 25)
+// ---------------------------------------------------------------------------
+export {
+  resolveStreamConfig,
+  evaluateWindowedStream,
+  evaluatePassthroughStream,
+} from "./streaming/stream-evaluator.js";
+export type {
+  StreamEvalConfig,
+  StreamChunkAdapter,
+} from "./streaming/stream-evaluator.js";
+
+// ---------------------------------------------------------------------------
+// Phase 10 — Provider Adapter Interface (Section 30)
+// ---------------------------------------------------------------------------
+export type {
+  ProviderAdapter,
+  ProviderAuthConfig,
+  ProviderRegionInfo,
+} from "./adapters/adapter.js";
+export { openAIAdapter } from "./adapters/openai.js";
+export { anthropicAdapter } from "./adapters/anthropic.js";
+export { groqAdapter } from "./adapters/groq.js";
+export { vertexAdapter } from "./adapters/vertex.js";
+export { mistralAdapter } from "./adapters/mistral.js";
+export { vllmAdapter } from "./adapters/vllm.js";
+export { bedrockAdapter } from "./adapters/bedrock.js";
+export { deepSeekAdapter } from "./adapters/deepseek.js";
+export { moonshotAdapter } from "./adapters/moonshot.js";
+export { zhipuAdapter } from "./adapters/zhipu.js";
+export { baichuanAdapter } from "./adapters/baichuan.js";
+export {
+  registerAdapter,
+  resolveAdapter,
+  listAdapters,
+  hasAdapter,
+} from "./adapters/loader.js";
 
 // ---------------------------------------------------------------------------
 // Main class
