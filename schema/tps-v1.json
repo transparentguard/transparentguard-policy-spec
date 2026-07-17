@@ -252,6 +252,22 @@
           "default": false
         },
 
+        "providers": {
+          "type": "array",
+          "description": "Tier 1 rule-level provider scoping. Glob list of provider/model identifiers this rule applies to. When set, the rule is SKIPPED (not blocked) for providers that do not match. Supports wildcards (openai/*), negations (!deepseek/*), and the special value 'any'. Evaluated before rule logic runs. See Section 30.",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "examples": [
+            ["openai/*", "anthropic/*"],
+            ["!deepseek/*", "any"]
+          ]
+        },
+
+        "provider_match": {
+          "$ref": "#/$defs/provider_match",
+          "description": "Tiers 2 and 3 rule-level provider scoping. Capability, risk-tier, training jurisdiction, and attestation matching. Applied alongside providers[]. See Section 30."
+        },
+
         "enforce_type": {
           "type": "string",
           "description": "The enforcement type for enforce action rules.",
@@ -259,6 +275,7 @@
             "provider_allowlist",
             "token_budget",
             "data_residency",
+            "data_sovereignty",
             "rate_limit",
             "tool_allowlist",
             "schema_validation",
@@ -295,11 +312,62 @@
 
         "allowed_regions": {
           "type": "array",
-          "description": "For data_residency enforce rules. Provider regions that are permitted.",
+          "description": "For data_residency enforce rules (legacy). Provider regions that are permitted. For new deployments prefer data_sovereignty with allowed_processor_regions.",
           "items": { "type": "string" },
           "minItems": 1,
           "uniqueItems": true,
           "examples": [["eu-west-1", "eu-central-1"]]
+        },
+
+        "data_subject_jurisdiction": {
+          "$ref": "#/$defs/data_subject_jurisdiction",
+          "description": "For data_sovereignty enforce rules. Describes how to determine the data subject's jurisdiction and which jurisdictions this rule applies to. See Section 31."
+        },
+
+        "allowed_processor_regions": {
+          "type": "array",
+          "description": "For data_sovereignty enforce rules. Cloud regions where AI processing is permitted. Supports prefix wildcards (eu-*). At least one region or blocked_processor_jurisdictions is required for data_sovereignty rules.",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "examples": [["eu-west-1", "eu-west-2", "eu-central-1", "europe-west-*"]]
+        },
+
+        "blocked_processor_jurisdictions": {
+          "type": "array",
+          "description": "For data_sovereignty enforce rules. ISO 3166-1 alpha-2 country codes. Requests routed to providers in these jurisdictions are blocked regardless of allowed_processor_regions.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "description": "ISO 3166-1 alpha-2 country code."
+          },
+          "uniqueItems": true,
+          "examples": [["CN", "RU", "BY", "IR"]]
+        },
+
+        "blocked_training_jurisdictions": {
+          "type": "array",
+          "description": "For data_sovereignty enforce rules and provider_match. ISO 3166-1 alpha-2 country codes. Requests are blocked if the resolved provider's model was trained in any of these jurisdictions, per the TG Provider Registry.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "uniqueItems": true,
+          "examples": [["CN", "RU"]]
+        },
+
+        "transfer_mechanism": {
+          "$ref": "#/$defs/transfer_mechanism",
+          "description": "For data_sovereignty enforce rules. Specifies which GDPR-lawful transfer mechanisms (Art. 46) must be in place for the processing to be permitted. See Section 31."
+        },
+
+        "legal_basis": {
+          "type": "string",
+          "description": "For data_sovereignty enforce rules. Machine-readable legal basis code emitted in every sovereignty audit event. Common values: gdpr_article_6_1_a (consent), gdpr_article_6_1_b (contract), gdpr_article_6_1_c (legal obligation), gdpr_article_6_1_f (legitimate interests), hipaa_treatment_payment_operations, ccpa_business_purpose.",
+          "examples": [
+            "gdpr_article_6_1_b",
+            "gdpr_article_6_1_f",
+            "hipaa_treatment_payment_operations"
+          ]
         },
 
         "max_requests_per_minute_per_key": {
@@ -490,6 +558,19 @@
         },
         {
           "if": {
+            "properties": { "enforce_type": { "const": "data_sovereignty" } },
+            "required": ["enforce_type"]
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["allowed_processor_regions"] },
+              { "required": ["blocked_processor_jurisdictions"] },
+              { "required": ["blocked_training_jurisdictions"] }
+            ]
+          }
+        },
+        {
+          "if": {
             "properties": { "enforce_type": { "const": "schema_validation" } },
             "required": ["enforce_type"]
           },
@@ -543,6 +624,126 @@
         }
       ]
 
+    },
+
+    "provider_match": {
+      "type": "object",
+      "description": "Tiers 2 and 3 rule-level provider scoping (Section 30). When present on a rule, the rule is skipped for providers that don't match ALL specified criteria.",
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "description": "Required capabilities. Rule skipped if the provider lacks any capability in this list.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "text_generation", "function_calling", "vision", "multimodal",
+              "structured_output", "embedding", "reranking", "code_generation",
+              "reasoning", "fine_tuning"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "risk_tier": {
+          "type": "array",
+          "description": "Accepted risk tiers. Rule skipped if the provider's risk tier is not in this list.",
+          "items": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "uniqueItems": true
+        },
+        "min_context_window": {
+          "type": "integer",
+          "description": "Rule skipped if the provider's maximum context window (tokens) is below this value.",
+          "minimum": 1
+        },
+        "training_cutoff_after": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO-8601 date. Rule skipped if the provider's training data cutoff is before this date."
+        },
+        "blocked_training_jurisdictions": {
+          "type": "array",
+          "description": "ISO 3166-1 alpha-2 codes. Rule skipped if provider trained in any of these jurisdictions.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "uniqueItems": true
+        },
+        "requires_attestation": {
+          "type": "array",
+          "description": "Compliance attestations the provider must hold. Rule skipped if any are missing.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "soc2-type2", "iso-27001", "hipaa-baa", "gdpr-dpa",
+              "fedramp-moderate", "fedramp-high", "pci-dss", "hitrust", "ccpa"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "requires_signed_response": {
+          "type": "boolean",
+          "description": "When true, rule skipped unless the provider returns a TG-compatible signed response header.",
+          "default": false
+        },
+        "excludes": {
+          "type": "array",
+          "description": "Provider globs to explicitly exclude. Evaluated before positive criteria. A provider matching any entry here causes the rule to be skipped.",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "data_subject_jurisdiction": {
+      "type": "object",
+      "description": "Configures how the data subject's jurisdiction is determined at runtime and which jurisdictions this rule applies to (Section 31).",
+      "additionalProperties": false,
+      "properties": {
+        "infer_from": {
+          "type": "string",
+          "description": "How to determine the subject's jurisdiction at runtime.",
+          "enum": ["geo_ip", "request_header", "metadata"]
+        },
+        "accept": {
+          "type": "array",
+          "description": "ISO 3166-1 alpha-2 codes, 'EU', or 'EEA'. This rule is SKIPPED (not an error) for subjects outside this list.",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "examples": [["EU", "EEA", "UK"], ["US"], ["DE", "FR", "IT"]]
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Default jurisdiction when inference fails (e.g. no IP header, no metadata). If absent and inference fails, the rule is evaluated with subject_jurisdiction=unknown."
+        }
+      }
+    },
+
+    "transfer_mechanism": {
+      "type": "object",
+      "description": "Specifies which GDPR Art. 46 transfer mechanisms must be present for the processing to be lawful (Section 31).",
+      "additionalProperties": false,
+      "required": ["require_one_of"],
+      "properties": {
+        "require_one_of": {
+          "type": "array",
+          "description": "At least one of these mechanisms must be verifiable. adequacy_decision: resolved from the TG Adequacy Decision table. standard_contractual_clauses / binding_corporate_rules: asserted via metadata.tg_transfer_mechanism. derogation: use only for one-off transfers under GDPR Art. 49.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "adequacy_decision",
+              "standard_contractual_clauses",
+              "binding_corporate_rules",
+              "derogation"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
     },
 
     "rule_streaming": {
