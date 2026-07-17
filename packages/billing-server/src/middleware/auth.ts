@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 
 export function requireAuth(): RequestHandler {
@@ -15,7 +16,12 @@ export function requireAuth(): RequestHandler {
     }
 
     const token = authHeader.slice("Bearer ".length);
-    if (token !== secret) {
+    const tokenBuf = Buffer.from(token);
+    const secretBuf = Buffer.from(secret);
+    const valid =
+      tokenBuf.length === secretBuf.length &&
+      timingSafeEqual(tokenBuf, secretBuf);
+    if (!valid) {
       res.status(401).json({ error: "Unauthorized: invalid token" });
       return;
     }
