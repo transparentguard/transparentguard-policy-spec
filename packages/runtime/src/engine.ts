@@ -456,10 +456,15 @@ async function evaluateLog(rule: TPSRule, ctx: EvaluationContext): Promise<RuleR
 }
 
 // ---------------------------------------------------------------------------
-// Main evaluate() function
+// Main evaluate() function — with fail_mode wrapper (Phase 10 / Section 3a)
 // ---------------------------------------------------------------------------
 
-export async function evaluate(
+/**
+ * Core evaluation logic. Called by the public evaluate() wrapper.
+ * Never call this directly — always call evaluate() so the fail_mode
+ * try/catch wraps the entire execution.
+ */
+async function coreEvaluate(
   stage: RuleStage,
   payload: RequestPayload | ResponsePayload,
   policy: TPSPolicy,
@@ -724,6 +729,61 @@ function buildPatternFlags(
   if (flags?.includes("multiline")) f += "m";
   if (flags?.includes("dotall")) f += "s";
   return f;
+}
+
+/**
+ * Public evaluate() entry point.
+ *
+ * Wraps coreEvaluate() with fail_mode handling (Section 3a — Phase 10):
+ *   fail_mode: "closed" (default) — rethrow any unexpected engine error (safest)
+ *   fail_mode: "open"             — on error, return allowed: true with audit event
+ *
+ * Precedence: environment.fail_mode > policy.fail_mode > "closed"
+ */
+export async function evaluate(
+  stage: RuleStage,
+  payload: RequestPayload | ResponsePayload,
+  policy: TPSPolicy,
+  licenseStatus: LicenseStatus,
+  options: EvaluateOptions = {},
+): Promise<EvaluateResult> {
+  const env = policy.environments?.find((e) => e.name === options.environment);
+  const failMode: "open" | "closed" = env?.fail_mode ?? policy.fail_mode ?? "closed";
+
+  try {
+    return await coreEvaluate(stage, payload, policy, licenseStatus, options);
+  } catch (err) {
+    if (failMode === "open") {
+      // Fail-open: allow the call through and log the system error as an audit event.
+      // The caller receives allowed: true but the audit trail records what went wrong.
+      return {
+        allowed: true,
+        payload,
+        violations: [],
+        tags: { "tg.fail_mode": "open", "tg.system_error": String(err) },
+        audit_events: [
+          {
+            id: makeId(),
+            timestamp: new Date().toISOString(),
+            policy_name: policy.name,
+            policy_version: "1.0",
+            event_type: "error" as const,
+            stage,
+            tags: { "tg.fail_mode": "open" },
+            metadata: {
+              error: String(err),
+              fail_mode: "open",
+              environment: options.environment ?? "__default__",
+            },
+          },
+        ],
+        evaluated_at: new Date().toISOString(),
+        policy_name: policy.name,
+      };
+    }
+    // fail_mode: "closed" — rethrow; caller (wrapper or consumer) handles it
+    throw err;
+  }
 }
 
 // Re-export expandCategories so dependents don't need to import from pii directly
