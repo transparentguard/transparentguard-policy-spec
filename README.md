@@ -80,7 +80,7 @@ Point any TPS-compatible runtime at this file and every LLM call your applicatio
 
 ## API Key
 
-All tiers, including the free tier, require a TransparentGuard API key. Keys are free, permanent, and require no credit card. Obtain one at [transparentguard.com](https://transparentguard.com).
+All tiers, including the free tier, require a TransparentGuard API key. Keys are free, permanent, and require no credit card. Obtain one at [transparentguard.dev](https://transparentguard.dev).
 
 Set the key in your environment before initializing the runtime:
 
