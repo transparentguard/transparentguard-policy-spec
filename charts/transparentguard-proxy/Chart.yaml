@@ -4,13 +4,13 @@ description: TransparentGuard Proxy — OpenAI-compatible HTTP proxy with AI pol
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://transparentguard.com
+home: https://transparentguard.dev
 sources:
   - https://github.com/transparentguard/proxy
 maintainers:
   - name: TransparentGuard
-    email: engineering@transparentguard.com
-    url: https://transparentguard.com
+    email: engineering@transparentguard.dev
+    url: https://transparentguard.dev
 keywords:
   - ai
   - llm
