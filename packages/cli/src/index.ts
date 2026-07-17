@@ -15,6 +15,9 @@ import { runTest } from "./commands/test-cmd";
 import { runKeys } from "./commands/keys";
 import { runReport } from "./commands/report";
 import { runServeMcp } from "./commands/serve-mcp";
+import { runDataset } from "./commands/dataset";
+import { runTrain } from "./commands/train";
+import { runModel } from "./commands/model-cmd";
 
 const VERSION = "0.1.0";
 
@@ -32,6 +35,10 @@ COMMANDS
   keys     create            Generate an offline license key (air-gapped deployments)
   report                     Generate a compliance evidence package from audit logs
   serve    --mcp             Start MCP tool server on stdio
+
+  dataset  <subcommand>      Manage labeled training datasets (add, import, validate, version, export, review)
+  train    <subcommand>      Submit and manage classifier training jobs (start, status, cancel, list)
+  model    <subcommand>      Manage trained model artifacts (list, inspect, sign, verify, rollback)
 
 GLOBAL OPTIONS
   --version, -v              Print version and exit
@@ -71,6 +78,15 @@ async function main(): Promise<void> {
       break;
     case "serve":
       await runServeMcp(rest);
+      break;
+    case "dataset":
+      await runDataset(rest);
+      break;
+    case "train":
+      await runTrain(rest);
+      break;
+    case "model":
+      await runModel(rest);
       break;
     default:
       process.stderr.write(`Error: unknown command "${command}"\n`);
