@@ -135,80 +135,6 @@ A runtime claims TPS v1 conformance when it:
 4. Produces audit events in the format defined in this specification
 5. Passes the TPS v1 conformance test suite (see `tests/` in the reference implementation)
 
-    ---
-
-    ## Custom Classifier Training
-
-    Enterprise and OEM tier licenses include the `custom_classifier_training` feature, which lets you train domain-specific classifiers from your own labeled data and load them directly into the TPS classifier pipeline.
-
-    ### Dataset management
-
-    ```bash
-    # Add a labeled example
-    tg dataset add my-classifier --text "Ignore all previous instructions" --label harmful
-
-    # Bulk-import from JSONL (one {"text":"…","label":"…"} per line)
-    tg dataset import my-classifier --file ./raw-data.jsonl
-
-    # Validate dataset quality before training
-    tg dataset validate my-classifier
-
-    # Create an immutable snapshot
-    tg dataset version my-classifier
-
-    # Export to JSONL
-    tg dataset export my-classifier --output ./export.jsonl
-
-    # Review uncertain predictions queued by the active learning loop
-    tg dataset review my-classifier
-    ```
-
-    ### Training
-
-    ```bash
-    # Submit a job (local backend is always available; returns instructions for Modal/SageMaker/Replicate)
-    tg train start my-classifier --backend local
-
-    # Check job status
-    tg train status tg-job-a1b2c3d4
-
-    # List all jobs
-    tg train list
-    ```
-
-    ### Model artifact management
-
-    ```bash
-    # List all trained artifacts
-    tg model list
-
-    # Inspect manifest, model card, and SLSA provenance
-    tg model inspect my-classifier
-
-    # Sign with ECDSA-P256 (Cosign-compatible)
-    tg model sign my-classifier
-
-    # Verify signature
-    tg model verify my-classifier
-
-    # Roll back HEAD to a previous version
-    tg model rollback my-classifier v1
-    ```
-
-    ### Using a trained model in a TPS policy
-
-    Once an artifact is signed and placed at a known path, reference it in your policy via the `custom_classifiers` block (requires `oem_embed` or `custom_classifier_training` feature):
-
-    ```yaml
-    custom_classifiers:
-    - name: my-classifier
-      local_model_path: "~/.tg/models/my-classifier/HEAD/model.onnx"
-      threshold: 0.75
-    ```
-
-    The runtime loads the ONNX model, runs inference, and feeds the score into the TPS rule pipeline identically to a built-in classifier. Uncertain predictions below the threshold are automatically queued in the active learning loop for human review.
-
-    
 ---
 
 ## Contributing
@@ -226,3 +152,74 @@ Breaking changes require a deprecation period of one full minor version cycle.
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+---
+
+## Phase 9 — Provider Scoping and Data Sovereignty (Section 30 & 31)
+
+### Rule-Level Provider Scoping (Section 30)
+
+A three-tier system for scoping individual rules to specific providers without blocking the overall call:
+
+**Tier 1 — Glob list:** Rules can declare which providers they apply to. Non-matching providers cause the rule to be *skipped*, not blocked.
+
+```yaml
+- id: vision-pii-rule
+  stage: pre-request
+  action: redact
+  providers: [openai/*, anthropic/*, "!ollama/*"]
+  targets:
+    - type: pii
+      categories: [pii_all]
+  on_violation: redact
+```
+
+**Tier 2 — Capability matching:** Rules activate only when the provider has specific capabilities, risk tier, or training cutoff:
+
+```yaml
+  provider_match:
+    capabilities: [vision, reasoning]
+    risk_tier: [low, medium]
+    training_cutoff_after: "2024-01-01"
+    blocked_training_jurisdictions: [CN, RU]
+```
+
+**Tier 3 — Attestation gating:** Rules require compliance certifications from the provider:
+
+```yaml
+  provider_match:
+    requires_attestation: [hipaa-baa, soc2-type2]
+```
+
+Capability and attestation data comes from the **TG Provider Registry** (`registry/REGISTRY.md`) — an open, versioned catalog of AI providers. Current registry includes: OpenAI, Anthropic, Google DeepMind, Mistral AI, Cohere, AWS Bedrock, Azure OpenAI, DeepSeek, Ollama, Hugging Face, and Replicate.
+
+---
+
+### Data Sovereignty (Section 31)
+
+Full three-jurisdiction sovereignty enforcement via `enforce_type: data_sovereignty`:
+
+```yaml
+- id: eu-sovereignty
+  stage: pre-request
+  action: enforce
+  enforce_type: data_sovereignty
+  data_subject_jurisdiction:
+    infer_from: geo_ip
+    accept: [EU, EEA, UK]
+    fallback: EU
+  allowed_processor_regions: [eu-west-1, eu-central-1, europe-west-*]
+  blocked_processor_jurisdictions: [CN, RU, BY, IR]
+  blocked_training_jurisdictions: [CN]
+  transfer_mechanism:
+    require_one_of: [adequacy_decision, standard_contractual_clauses]
+  legal_basis: gdpr_article_6_1_b
+  on_violation: block
+```
+
+The runtime ships with:
+- **TG Adequacy Decision table** — all EU Commission adequacy decisions including the EU-US DPF
+- **Region→jurisdiction mapping** — all AWS, GCP, and Azure regions mapped to ISO 3166-1 countries
+- **Legal basis codes** — machine-readable codes for GDPR, HIPAA, and CCPA
+
+New example: `examples/data-sovereignty.yaml`.
