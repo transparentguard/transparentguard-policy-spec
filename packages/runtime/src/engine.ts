@@ -304,6 +304,8 @@ async function evaluateClassify(rule: TPSRule, ctx: EvaluationContext): Promise<
     score = result.score;
     source = result.source;
   } else if (isPaidTier && apiKey) {
+    // Gate 2: ML classifier API requires ml_classifiers feature (Startup tier and above)
+    assertFeature(licenseStatus, "ml_classifiers", "ML classifier scoring");
     try {
       const result = await callClassifierApi(
         { classifier, text, stage },
@@ -384,10 +386,14 @@ async function evaluateEnforce(rule: TPSRule, ctx: EvaluationContext): Promise<R
     case "schema_validation":
       return enforceSchemaValidation(enforceCtx);
     case "confidentiality":
+      // Gate 2: confidentiality enforcement requires Startup tier
+      assertFeature(ctx.licenseStatus, "confidentiality_check", "Confidentiality enforcement");
       return enforceConfidentiality(enforceCtx);
     case "data_residency":
       return enforceDataResidency(enforceCtx);
     case "data_sovereignty":
+      // Gate 2: data sovereignty enforcement requires Enterprise tier
+      assertFeature(ctx.licenseStatus, "data_sovereignty", "Data sovereignty enforcement");
       return enforceDataSovereignty(enforceCtx);
     case "factual_grounding": {
       const groundingRule: TPSRule = {
@@ -519,6 +525,10 @@ async function coreEvaluate(
   for (const framework of policy.compliance_frameworks ?? []) {
     const rules = FRAMEWORK_RULES[framework];
     if (rules) frameworkRules.push(...rules);
+  }
+  // Gate 2: multi-environment scoping requires Growth tier
+  if (environment && (policy.environments ?? []).length > 0) {
+    assertFeature(licenseStatus, "multi_environment", "Multi-environment policy scoping");
   }
   const userRules = getActiveRules(policy, environment);
   const allRules = [...frameworkRules, ...userRules];
