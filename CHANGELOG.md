@@ -7,7 +7,50 @@ This spec follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] — Runtime v0.3.1 enforcement tightening
+## [Unreleased — Phase 8] — Custom Classifier Training Pipeline
+
+    ### Added
+
+    **Custom Classifier Training** (Enterprise + OEM tiers, feature flag `custom_classifier_training`)
+
+    *Dataset management*
+    - `packages/runtime/src/training/dataset/store.ts` — JSONL-based labeled example store with content-addressed example IDs (SHA-256 of text), deduplication, `addExample`, `importJsonl`, `exportJsonl`, `computeStats`, and `listDatasets`.
+    - `packages/runtime/src/training/dataset/validator.ts` — Pre-training dataset validation: label balance, minimum examples per label, duplicate detection, vocabulary size, uncertainty fraction.
+    - `packages/runtime/src/training/dataset/versioning.ts` — Immutable content-addressed dataset snapshots. Each snapshot stores the SHA-256 hash over the full JSONL content; `verifySnapshot` re-derives the hash at verification time.
+    - `packages/runtime/src/training/dataset/auto-labeler.ts` — Bootstrap labels from existing TG built-in classifiers; supports pluggable labeler registration via `registerAutoLabeler`.
+    - `packages/runtime/src/training/dataset/drift.ts` — KL-divergence drift detection over score-bucket windows; `appendDriftEntry`, `readDriftWindow`, `checkDrift`.
+
+    *Training jobs*
+    - `packages/runtime/src/training/jobs/manager.ts` — Append-only NDJSON job state machine at `~/.tg/jobs/jobs.ndjson`; `submitJob`, `listJobs`, `getJob`, `refreshJobStatus`, `cancelJob`.
+    - `packages/runtime/src/training/jobs/manifest.ts` — SLSA L2 provenance documents: `buildProvenance`, `signProvenance` (ECDSA-P256, Cosign-compatible), `verifyProvenance`, `formatProvenance`.
+
+    *Compute backends*
+    - `packages/runtime/src/training/backends/interface.ts` — `ITrainerBackend` interface; all backends are compute-backend-agnostic.
+    - `packages/runtime/src/training/backends/local.ts` — `LocalTrainerBackend` (always-available no-op; returns `status: "pending"` with a helpful error message pointing to Modal/SageMaker/Replicate).
+    - `packages/runtime/src/training/backends/registry.ts` — `registerBackend`, `getBackend`, `listBackends`; local backend pre-registered.
+
+    *Model artifacts*
+    - `packages/runtime/src/training/models/store.ts` — Content-addressed artifact directories; `createArtifact`, `loadArtifact`, `resolveVersion`, `updateManifest`, `setHead` (used by rollback), `listModelClassifiers`, `listArtifactVersions`, `formatModelList`.
+    - `packages/runtime/src/training/models/signing.ts` — Cosign simple-signing envelope over ONNX hash; `signArtifact`, `verifyArtifact`.
+    - `packages/runtime/src/training/models/card.ts` — HuggingFace model card spec; `generateModelCard`, `formatModelCard`, `toHuggingFaceReadme`.
+    - `packages/runtime/src/training/models/loader.ts` — ONNX fallback chain (ONNX → webhook placeholder → clean); `loadAndInfer`. Active learning queue: uncertain predictions auto-queued via `appendActiveLearningEntry`; reviewable with `readActiveLearningQueue` / `clearActiveLearningQueue`.
+
+    *Training barrel and type system*
+    - `packages/runtime/src/training/index.ts` — Full training module barrel; re-exported from the main `@transparentguard/runtime` barrel.
+    - `packages/runtime/src/training/types.ts` — All core interfaces: `LabeledExample`, `DatasetManifest`, `TrainingSpec`, `TrainingJob`, `JobStatus`, `ModelManifest`, `ModelArtifact`, `ModelCard`, `SLSAProvenance`, `ActiveLearningEntry`, `DriftReport`, `ITrainerBackend`.
+
+    *CLI commands*
+    - `packages/cli/src/commands/dataset.ts` — `tg dataset` with subcommands: `add`, `import`, `list`, `validate`, `version`, `versions`, `export`, `review`.
+    - `packages/cli/src/commands/train.ts` — `tg train` with subcommands: `start`, `status`, `cancel`, `list`. Includes pre-flight dataset validation and dataset version resolution before job submission.
+    - `packages/cli/src/commands/model-cmd.ts` — `tg model` with subcommands: `list`, `inspect`, `sign`, `verify`, `rollback`.
+
+    *License integration*
+    - `"custom_classifier_training"` added to `VALID_FEATURES` and the `LicenseFeature` union type in `packages/runtime/src/license/checker.ts`.
+    - Feature included in default Enterprise and OEM tier feature lists in `packages/cli/src/commands/keys.ts`.
+
+    ---
+
+    ## [Unreleased] — Runtime v0.3.1 enforcement tightening
 
 ### Changed
 
