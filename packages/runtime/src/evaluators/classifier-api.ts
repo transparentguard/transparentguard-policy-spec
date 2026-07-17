@@ -11,7 +11,7 @@ import { classifyJailbreak } from "./built-in/jailbreak-v1.js";
 import { getCalibrationFactor } from "../util/session.js";
 import { _validateKeyProvenance } from "../trust/keys.js";
 
-const DEFAULT_API_BASE = "https://api.transparentguard.com";
+const DEFAULT_API_BASE = "https://api.transparentguard.dev";
 const CLASSIFIER_TIMEOUT_MS = 8000;
 
 export interface ClassifierRequest {
