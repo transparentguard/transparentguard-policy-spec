@@ -217,7 +217,7 @@ export function verifyOfflineKey(licenseKey: string): LicenseStatus {
   if (!licenseKey.startsWith("tgk1_")) {
     throw new TransparentGuardError(
       "Invalid offline license key format — expected prefix tgk1_. " +
-        "Generate a key with `tg keys create` or check transparentguard.com.",
+        "Generate a key with `tg keys create` or check transparentguard.dev.",
       "invalid_key",
     );
   }
@@ -294,7 +294,7 @@ export function verifyOfflineKey(licenseKey: string): LicenseStatus {
   if (payload.exp < nowSec) {
     throw new TransparentGuardError(
       `Offline license key expired at ${new Date(payload.exp * 1000).toISOString()}. ` +
-        "Generate a new key with `tg keys create` or upgrade at transparentguard.com.",
+        "Generate a new key with `tg keys create` or upgrade at transparentguard.dev.",
       "trial_expired",
     );
   }
@@ -431,7 +431,7 @@ interface LicenseApiResponse {
 }
 
 const CHECK_TIMEOUT_MS = 5_000;
-const DEFAULT_API_BASE = "https://api.transparentguard.com";
+const DEFAULT_API_BASE = "https://api.transparentguard.dev";
 
 async function checkApiKey(
   apiKey: string,
@@ -458,12 +458,12 @@ async function checkApiKey(
       const code = String(body["code"] ?? "");
       if (code === "trial_expired") {
         throw new TransparentGuardError(
-          "Your TransparentGuard trial has ended. Upgrade at transparentguard.com to continue.",
+          "Your TransparentGuard trial has ended. Upgrade at transparentguard.dev to continue.",
           "trial_expired",
         );
       }
       throw new TransparentGuardError(
-        "Invalid TransparentGuard API key. Check your key at transparentguard.com.",
+        "Invalid TransparentGuard API key. Check your key at transparentguard.dev.",
         "invalid_key",
       );
     }
@@ -496,7 +496,7 @@ async function checkApiKey(
 
     if (status.trialActive === false && status.tier === "free" && !data.valid) {
       throw new TransparentGuardError(
-        "Your TransparentGuard trial has ended. Upgrade at transparentguard.com to continue.",
+        "Your TransparentGuard trial has ended. Upgrade at transparentguard.dev to continue.",
         "trial_expired",
       );
     }
@@ -544,7 +544,7 @@ export async function checkLicense(
     console.warn(
       "[TransparentGuard] The `offlineMode` parameter is deprecated and will be removed in v0.5.0. " +
         "It no longer grants paid features — use TG_LICENSE_KEY with an offline key instead. " +
-        "See: https://transparentguard.com/docs/offline-license",
+        "See: https://transparentguard.dev/docs/offline-license",
     );
     return makeFreeStatus();
   }
@@ -581,7 +581,7 @@ export async function checkLicense(
               ? "In serverless environments the grace cache resets on cold starts — " +
                 "consider using TG_LICENSE_KEY for reliable operation. "
               : "") +
-            `Verify network connectivity to api.transparentguard.com. Original error: ${err.message}`,
+            `Verify network connectivity to api.transparentguard.dev. Original error: ${err.message}`,
           "api_unreachable",
         );
       }
@@ -659,7 +659,7 @@ export function assertFeature(
 ): void {
   if (!status.features.includes(feature)) {
     throw new TransparentGuardError(
-      `${featureDescription} requires a paid TransparentGuard plan. Upgrade at transparentguard.com.`,
+      `${featureDescription} requires a paid TransparentGuard plan. Upgrade at transparentguard.dev.`,
       "feature_requires_paid_tier",
       feature,
     );
@@ -678,7 +678,7 @@ export function assertTier(
 ): void {
   if (TIER_RANK[status.tier] < TIER_RANK[required]) {
     throw new TransparentGuardError(
-      `${featureDescription} requires a ${required} plan or above. Upgrade at transparentguard.com.`,
+      `${featureDescription} requires a ${required} plan or above. Upgrade at transparentguard.dev.`,
       "feature_requires_paid_tier",
       required,
     );
