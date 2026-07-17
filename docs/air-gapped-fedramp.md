@@ -10,8 +10,8 @@ In normal operation, the TG runtime makes three categories of outbound calls:
 
 | Call type | Destination | Air-gap replacement |
 |---|---|---|
-| License validation | `api.transparentguard.com` | Offline HMAC key — no call made |
-| Classifier model download | `cdn.transparentguard.com` | Pre-bundled classifiers in OCI image |
+| License validation | `api.transparentguard.dev` | Offline HMAC key — no call made |
+| Classifier model download | `cdn.transparentguard.dev` | Pre-bundled classifiers in OCI image |
 | Audit log delivery | Configurable destination | File or internal S3-compatible endpoint |
 
 With all three replaced, the runtime makes **zero outbound calls** after startup.
