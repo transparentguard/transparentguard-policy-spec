@@ -129,7 +129,9 @@ export function startKeyRotationWatcher(
       if (ks) {
         _activeKeySet = ks;
       }
-    }).catch(() => { /* silent — key rotation failures are non-fatal */ });
+    }).catch((err: unknown) => {
+      console.warn(`[TransparentGuard] Key rotation fetch failed (non-fatal): ${String(err)}`);
+    });
   };
 
   // Immediate first fetch
