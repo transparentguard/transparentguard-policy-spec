@@ -55,7 +55,7 @@ const FRAMEWORK_RULES: Record<string, TPSRule[]> = {
   "fedramp-moderate": FEDRAMP_RULES,
 };
 
-const DEFAULT_API_BASE = "https://api.transparentguard.com";
+const DEFAULT_API_BASE = "https://api.transparentguard.dev";
 
 // ---------------------------------------------------------------------------
 // Stage matching
