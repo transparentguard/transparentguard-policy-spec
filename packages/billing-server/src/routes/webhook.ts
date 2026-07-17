@@ -1,5 +1,5 @@
 import { Router, type Router as ExpressRouter, type Request, type Response } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { insertUsageEvent, DuplicateEventError } from "../db.js";
 
 const router: ExpressRouter = Router();
@@ -35,7 +35,12 @@ router.post("/webhook/usage", (req: Request, res: Response): void => {
     return;
   }
   const token = authHeader.slice("Bearer ".length);
-  if (token !== secret) {
+  const tokenBuf = Buffer.from(token);
+  const secretBuf = Buffer.from(secret);
+  const valid =
+    tokenBuf.length === secretBuf.length &&
+    timingSafeEqual(tokenBuf, secretBuf);
+  if (!valid) {
     res.status(401).json({ error: "Unauthorized: invalid token" });
     return;
   }
