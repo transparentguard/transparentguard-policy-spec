@@ -1,0 +1,1 @@
+{"version":3,"file":"stdout.d.ts","sourceRoot":"","sources":["../../../src/audit/destinations/stdout.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,gBAAgB,CAAC;AAGjD,qBAAa,iBAAiB;IACtB,KAAK,CAAC,MAAM,EAAE,UAAU,EAAE,EAAE,MAAM,EAAE,QAAQ,GAAG,MAAM,GAAG,MAAM,GAAG,OAAO,CAAC,IAAI,CAAC;IAM9E,KAAK,IAAI,OAAO,CAAC,IAAI,CAAC;CAG7B"}
