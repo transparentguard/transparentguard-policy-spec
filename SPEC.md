@@ -38,6 +38,9 @@
 27. [Policy Testing Syntax](#27-policy-testing-syntax)
 28. [Tamper-Evident Audit Log Chaining](#28-tamper-evident-audit-log-chaining)
 29. [Automated Breach Notification Triggers](#29-automated-breach-notification-triggers)
+30. [Rule-Level Provider Scoping](#30-rule-level-provider-scoping)
+31. [Data Sovereignty](#31-data-sovereignty)
+32. [Provider Adapter Interface](#32-provider-adapter-interface)
 
 ---
 
