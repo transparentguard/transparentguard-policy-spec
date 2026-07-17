@@ -7,50 +7,83 @@ This spec follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased — Phase 8] — Custom Classifier Training Pipeline
+## [Unreleased] — Phase 9: Provider Scoping and Data Sovereignty
 
-    ### Added
+### Added
 
-    **Custom Classifier Training** (Enterprise + OEM tiers, feature flag `custom_classifier_training`)
+**Rule-level provider scoping — Tier 1 (Section 30)**
+- `providers` field on rule objects: a glob list of `provider/model` patterns that scope a rule to specific providers.
+- When set, the rule is **skipped** (not blocked) for providers that don't match — distinct from `enforce_type: provider_allowlist` which blocks the call.
+- Supports wildcards (`openai/*`), negations (`!deepseek/*`), and `any`.
+- Negations evaluated first: `["!deepseek/*", "any"]` blocks deepseek, allows all others.
+- Missing provider field on payload → rule evaluates (fail-open for unscoped rules).
 
-    *Dataset management*
-    - `packages/runtime/src/training/dataset/store.ts` — JSONL-based labeled example store with content-addressed example IDs (SHA-256 of text), deduplication, `addExample`, `importJsonl`, `exportJsonl`, `computeStats`, and `listDatasets`.
-    - `packages/runtime/src/training/dataset/validator.ts` — Pre-training dataset validation: label balance, minimum examples per label, duplicate detection, vocabulary size, uncertainty fraction.
-    - `packages/runtime/src/training/dataset/versioning.ts` — Immutable content-addressed dataset snapshots. Each snapshot stores the SHA-256 hash over the full JSONL content; `verifySnapshot` re-derives the hash at verification time.
-    - `packages/runtime/src/training/dataset/auto-labeler.ts` — Bootstrap labels from existing TG built-in classifiers; supports pluggable labeler registration via `registerAutoLabeler`.
-    - `packages/runtime/src/training/dataset/drift.ts` — KL-divergence drift detection over score-bucket windows; `appendDriftEntry`, `readDriftWindow`, `checkDrift`.
+**Rule-level provider scoping — Tiers 2 & 3 (Section 30)**
+- `provider_match` field on rule objects: capability, risk-tier, training-cutoff, training-jurisdiction, and attestation matching.
+- `capabilities`: rule skipped if provider lacks any required capability.
+- `risk_tier`: rule skipped if provider's risk tier is not in the accepted list.
+- `min_context_window`: rule skipped if provider context window is below threshold.
+- `training_cutoff_after`: rule skipped if provider training cutoff precedes this date.
+- `blocked_training_jurisdictions` (on `provider_match`): rule skipped if provider trained in any listed country.
+- `requires_attestation`: rule skipped if provider lacks any required compliance attestation.
+- `requires_signed_response`: rule skipped unless provider returns TG-compatible signed response.
+- `excludes`: explicit glob exclusion list evaluated before positive criteria.
+- Unknown providers (not in registry) with attestation requirements → rule skipped (fail-open).
 
-    *Training jobs*
-    - `packages/runtime/src/training/jobs/manager.ts` — Append-only NDJSON job state machine at `~/.tg/jobs/jobs.ndjson`; `submitJob`, `listJobs`, `getJob`, `refreshJobStatus`, `cancelJob`.
-    - `packages/runtime/src/training/jobs/manifest.ts` — SLSA L2 provenance documents: `buildProvenance`, `signProvenance` (ECDSA-P256, Cosign-compatible), `verifyProvenance`, `formatProvenance`.
+**TG Provider Registry (Section 30.7)**
+- `packages/runtime/src/registry/provider-registry.ts` — embedded open registry of AI providers.
+- Initial entries: OpenAI, Anthropic, Google DeepMind, Mistral AI, Cohere, AWS Bedrock, Azure OpenAI, DeepSeek, Ollama, Hugging Face, Replicate.
+- Per-provider fields: `headquarters_jurisdiction`, `training_jurisdictions`, `processing_regions`, `capabilities`, `risk_tier`, `max_context_window`, `training_cutoff`, `attestations`, `supports_signed_responses`.
+- Model-level overrides that merge with provider defaults.
+- `registry/REGISTRY.md` — open registry documentation, capability identifiers, attestation identifiers, risk tier definitions, submission process.
+- `PROVIDER_REGISTRY.getProvider("openai/gpt-4o")` returns merged provider+model entry.
+- All provider scoping exports available from `@transparentguard/runtime` barrel.
 
-    *Compute backends*
-    - `packages/runtime/src/training/backends/interface.ts` — `ITrainerBackend` interface; all backends are compute-backend-agnostic.
-    - `packages/runtime/src/training/backends/local.ts` — `LocalTrainerBackend` (always-available no-op; returns `status: "pending"` with a helpful error message pointing to Modal/SageMaker/Replicate).
-    - `packages/runtime/src/training/backends/registry.ts` — `registerBackend`, `getBackend`, `listBackends`; local backend pre-registered.
+**`enforce_type: data_sovereignty` (Section 31)**
+- New enforce type that extends `data_residency` with a full three-jurisdiction model.
+- `data_subject_jurisdiction` — configures who this rule applies to and how jurisdiction is inferred (`geo_ip`, `request_header`, `metadata`). `accept` list with `EU`/`EEA` shorthand expansion. Rule is skipped (not violated) when subject is outside the accept list.
+- `allowed_processor_regions` — cloud regions where AI processing is permitted. Prefix wildcards supported (`eu-*`).
+- `blocked_processor_jurisdictions` — ISO 3166-1 alpha-2 codes. Takes precedence over `allowed_processor_regions`. Evaluated against the embedded region→jurisdiction mapping table covering all AWS, GCP, and Azure regions.
+- `blocked_training_jurisdictions` (on rule) — blocks calls to providers whose models were trained in listed countries. Resolved from TG Provider Registry.
+- `transfer_mechanism.require_one_of` — verifies a lawful GDPR transfer mechanism is in place. Values: `adequacy_decision`, `standard_contractual_clauses`, `binding_corporate_rules`, `derogation`. Adequacy decisions resolved from embedded table; SCCs/BCRs asserted via `metadata.tg_transfer_mechanism`.
+- `legal_basis` — machine-readable legal basis code emitted in every sovereignty audit event (does not affect enforcement).
+- Full sovereignty audit trail: `subject_jurisdiction`, `processor_jurisdiction`, `processor_region`, `transfer_mechanism_used`, `legal_basis` emitted as tags on every audit event from a sovereignty rule.
 
-    *Model artifacts*
-    - `packages/runtime/src/training/models/store.ts` — Content-addressed artifact directories; `createArtifact`, `loadArtifact`, `resolveVersion`, `updateManifest`, `setHead` (used by rollback), `listModelClassifiers`, `listArtifactVersions`, `formatModelList`.
-    - `packages/runtime/src/training/models/signing.ts` — Cosign simple-signing envelope over ONNX hash; `signArtifact`, `verifyArtifact`.
-    - `packages/runtime/src/training/models/card.ts` — HuggingFace model card spec; `generateModelCard`, `formatModelCard`, `toHuggingFaceReadme`.
-    - `packages/runtime/src/training/models/loader.ts` — ONNX fallback chain (ONNX → webhook placeholder → clean); `loadAndInfer`. Active learning queue: uncertain predictions auto-queued via `appendActiveLearningEntry`; reviewable with `readActiveLearningQueue` / `clearActiveLearningQueue`.
+**TG Adequacy Decision Table (Section 31.5)**
+- `packages/runtime/src/registry/adequacy-decisions.ts` — embedded EU Commission adequacy decision table.
+- Full adequacy: Andorra, Argentina, Faroe Islands, Guernsey, Israel, Isle of Man, Japan, Jersey, New Zealand, Republic of Korea, Switzerland, UK, Uruguay.
+- Conditional adequacy: Canada (PIPEDA sector), United States (DPF-certified organizations).
+- Not-adequate entries for CN, RU, BY, IR, IN, BR (non-exhaustive).
+- `isAdequate()`, `getAdequacyStatus()`, `isInEEA()`, `EU_EEA_JURISDICTIONS` exported from runtime barrel.
 
-    *Training barrel and type system*
-    - `packages/runtime/src/training/index.ts` — Full training module barrel; re-exported from the main `@transparentguard/runtime` barrel.
-    - `packages/runtime/src/training/types.ts` — All core interfaces: `LabeledExample`, `DatasetManifest`, `TrainingSpec`, `TrainingJob`, `JobStatus`, `ModelManifest`, `ModelArtifact`, `ModelCard`, `SLSAProvenance`, `ActiveLearningEntry`, `DriftReport`, `ITrainerBackend`.
+**New example**
+- `examples/data-sovereignty.yaml` — full working example covering EU GDPR sovereignty, US HIPAA sovereignty, capability-scoped PII redaction, and high-risk provider blocking.
 
-    *CLI commands*
-    - `packages/cli/src/commands/dataset.ts` — `tg dataset` with subcommands: `add`, `import`, `list`, `validate`, `version`, `versions`, `export`, `review`.
-    - `packages/cli/src/commands/train.ts` — `tg train` with subcommands: `start`, `status`, `cancel`, `list`. Includes pre-flight dataset validation and dataset version resolution before job submission.
-    - `packages/cli/src/commands/model-cmd.ts` — `tg model` with subcommands: `list`, `inspect`, `sign`, `verify`, `rollback`.
+**Schema updates (tps-v1.json)**
+- `providers` and `provider_match` fields added to rule object.
+- `data_sovereignty` added to `enforce_type` enum.
+- `data_subject_jurisdiction`, `allowed_processor_regions`, `blocked_processor_jurisdictions`, `blocked_training_jurisdictions`, `transfer_mechanism`, `legal_basis` fields added to rule object.
+- New `$defs/provider_match`, `$defs/data_subject_jurisdiction`, `$defs/transfer_mechanism` definitions.
+- New `allOf` conditional: `data_sovereignty` enforce type requires at least one of `allowed_processor_regions`, `blocked_processor_jurisdictions`, or `blocked_training_jurisdictions`.
+- `allowed_regions` description updated to note `data_sovereignty` with `allowed_processor_regions` is preferred for new deployments.
 
-    *License integration*
-    - `"custom_classifier_training"` added to `VALID_FEATURES` and the `LicenseFeature` union type in `packages/runtime/src/license/checker.ts`.
-    - Feature included in default Enterprise and OEM tier feature lists in `packages/cli/src/commands/keys.ts`.
+**Runtime exports**
+- `ProviderCapabilityMatch`, `DataSubjectJurisdiction`, `TransferMechanismConfig` types exported from `@transparentguard/runtime`.
+- `providerMatchesRuleScope`, `matchesProviderGlob` exported.
+- `enforceDataSovereignty` exported.
+- `PROVIDER_REGISTRY`, `ProviderRegistryEntry` exported.
+- `ADEQUACY_DECISIONS`, `AdequacyEntry`, `TransferMechanism`, `getAdequacyStatus`, `isAdequate`, `isInEEA`, `EU_EEA_JURISDICTIONS` exported.
 
-    ---
+### Changed
 
-    ## [Unreleased] — Runtime v0.3.1 enforcement tightening
+- `EnforceType` union in `packages/runtime/src/types.ts` extended with `"data_sovereignty"`.
+- `TPSRule` interface extended with all new provider scoping and sovereignty fields.
+- Engine `evaluateRule()` now checks `providerMatchesRuleScope()` before dispatching to any rule evaluator.
+- `enforce_type: provider_allowlist` description updated to clarify the distinction from rule-level `providers` scoping.
+
+---
+
+## [Unreleased] — Runtime v0.3.1 enforcement tightening
 
 ### Changed
 
