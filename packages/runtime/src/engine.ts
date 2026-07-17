@@ -28,6 +28,8 @@ import { enforceToolAllowlist } from "./enforcements/tool-allowlist.js";
 import { enforceSchemaValidation } from "./enforcements/schema-validation.js";
 import { enforceConfidentiality } from "./enforcements/confidentiality.js";
 import { enforceDataResidency } from "./enforcements/data-residency.js";
+import { enforceDataSovereignty } from "./enforcements/data-sovereignty.js";
+import { providerMatchesRuleScope } from "./enforcements/provider-scoping.js";
 import { evaluateThresholds, getBlockAllState } from "./threshold/engine.js";
 import { assertFeature, type LicenseStatus } from "./license/checker.js";
 
@@ -111,6 +113,21 @@ async function evaluateRule(
   rule: TPSRule,
   ctx: EvaluationContext,
 ): Promise<RuleResult> {
+  // ── Rule-level provider scoping (Tiers 1-3, Section 30) ─────────────────
+  // A scope miss SKIPS the rule — it does not block the call.
+  if (!providerMatchesRuleScope(rule, ctx)) {
+    const providerName = "provider" in ctx.payload ? (ctx.payload.provider ?? "unknown") : "unknown";
+    return {
+      ruleId: rule.id,
+      outcome: "skipped",
+      auditEvent: buildAuditEvent({
+        policy: ctx.policy, rule, eventType: "allowed", stage: ctx.stage,
+        payload: ctx.payload, tags: ctx.tags, requestId: ctx.requestId,
+        detail: `Rule "${rule.id}" skipped: provider "${providerName}" is not in this rule's scope.`,
+      }),
+    };
+  }
+
   switch (rule.action) {
     case "redact":
       return evaluateRedact(rule, ctx);
@@ -370,6 +387,8 @@ async function evaluateEnforce(rule: TPSRule, ctx: EvaluationContext): Promise<R
       return enforceConfidentiality(enforceCtx);
     case "data_residency":
       return enforceDataResidency(enforceCtx);
+    case "data_sovereignty":
+      return enforceDataSovereignty(enforceCtx);
     case "factual_grounding": {
       const groundingRule: TPSRule = {
         ...rule,
