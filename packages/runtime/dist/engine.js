@@ -279,6 +279,8 @@ async function evaluateClassify(rule, ctx) {
         source = result.source;
     }
     else if (isPaidTier && apiKey) {
+        // Gate 2: ML classifier API requires ml_classifiers feature (Startup tier and above)
+        (0, checker_js_1.assertFeature)(licenseStatus, "ml_classifiers", "ML classifier scoring");
         try {
             const result = await (0, classifier_api_js_1.callClassifierApi)({ classifier, text, stage }, apiKey, apiBaseUrl);
             score = result.score;
@@ -343,10 +345,14 @@ async function evaluateEnforce(rule, ctx) {
         case "schema_validation":
             return (0, schema_validation_js_1.enforceSchemaValidation)(enforceCtx);
         case "confidentiality":
+            // Gate 2: confidentiality enforcement requires Startup tier
+            (0, checker_js_1.assertFeature)(ctx.licenseStatus, "confidentiality_check", "Confidentiality enforcement");
             return (0, confidentiality_js_1.enforceConfidentiality)(enforceCtx);
         case "data_residency":
             return (0, data_residency_js_1.enforceDataResidency)(enforceCtx);
         case "data_sovereignty":
+            // Gate 2: data sovereignty enforcement requires Enterprise tier
+            (0, checker_js_1.assertFeature)(ctx.licenseStatus, "data_sovereignty", "Data sovereignty enforcement");
             return (0, data_sovereignty_js_1.enforceDataSovereignty)(enforceCtx);
         case "factual_grounding": {
             const groundingRule = {
@@ -460,6 +466,10 @@ async function coreEvaluate(stage, payload, policy, licenseStatus, options = {})
         const rules = FRAMEWORK_RULES[framework];
         if (rules)
             frameworkRules.push(...rules);
+    }
+    // Gate 2: multi-environment scoping requires Growth tier
+    if (environment && (policy.environments ?? []).length > 0) {
+        (0, checker_js_1.assertFeature)(licenseStatus, "multi_environment", "Multi-environment policy scoping");
     }
     const userRules = getActiveRules(policy, environment);
     const allRules = [...frameworkRules, ...userRules];
