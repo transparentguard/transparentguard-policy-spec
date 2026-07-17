@@ -7,6 +7,57 @@ This spec follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] — Phase 10: Performance, Security Posture, and Provider Adapters
+
+### Added
+
+**Fail-open / fail-closed (`fail_mode`) — Section 5.1 & Section 3a**
+- `fail_mode: "open" | "closed"` field on `TPSEnvironment` and `TPSPolicy`.
+- Controls runtime behaviour when the TG engine itself errors (not a policy violation).
+- `"closed"` (default): block request on engine error — safest for compliance environments.
+- `"open"`: pass request through with audit error event — better uptime for dev/staging.
+- Environment-level `fail_mode` overrides policy-level `fail_mode`.
+- JSON schema `tps-v1.json` updated with `fail_mode` definition in `$defs/environment`.
+- `coreEvaluate()` internal function; public `evaluate()` wraps with fail_mode try/catch.
+
+**Streaming window + passthrough + mid-stream abort — Section 25**
+- `packages/runtime/src/streaming/stream-evaluator.ts` — new generic streaming enforcement engine.
+- `evaluateWindowedStream<C>()`: rolling-window evaluation; abort mid-stream on violation with configurable `onStreamViolation`.
+- `evaluatePassthroughStream<C>()`: immediate chunk yield, full-content evaluation at stream end; synthetic abort chunk on block.
+- `StreamChunkAdapter<C>` interface: provider-agnostic adapter for chunk extraction and synthetic chunk construction.
+- `resolveStreamConfig()`: derives effective streaming config from policy defaults + per-call `EvaluateOptions` overrides.
+- OpenAI wrapper updated: dispatches to buffer / window / passthrough modes based on `evalOptions.streamMode`.
+- Anthropic wrapper updated: same three-mode dispatch with Anthropic SSE event adapter.
+- `EvaluateOptions` gains `streamMode`, `windowTokens`, `onStreamViolation` fields.
+- `StreamMode` and `OnStreamViolation` types added to `types.ts` and exported from package root.
+
+**Provider Adapter Interface — Section 32**
+- `packages/runtime/src/adapters/adapter.ts` — `ProviderAdapter` interface with `normalizeRequest`, `denormalizeRequest`, `normalizeResponse`, `denormalizeResponse` plus `auth`, `region`, `capabilities`, `isOpenAICompat`.
+- Built-in adapters for 11 providers: `openai`, `anthropic`, `groq`, `vertex`, `mistral`, `vllm`, `bedrock`, `deepseek`, `moonshot`, `zhipu`, `baichuan`.
+- `packages/runtime/src/adapters/loader.ts`: `resolveAdapter()`, `registerAdapter()`, `listAdapters()`, `hasAdapter()`.
+- All adapters exported from `@transparentguard/runtime` package root.
+- Chinese-jurisdiction providers (`deepseek`, `moonshot`, `zhipu`, `baichuan`) carry `jurisdiction: "CN"` — blocked by `data_sovereignty` policies with `blocked_processor_jurisdictions: [CN]`.
+- vLLM adapter uses `jurisdiction: "self-hosted"` sentinel to bypass jurisdiction checks for operator-controlled deployments.
+
+**Self-hosted security posture (Helm) — Phase 10**
+- `charts/transparentguard-proxy/templates/networkpolicy.yaml` — Kubernetes `NetworkPolicy` for the proxy.
+  - Egress: DNS (TCP/UDP 53) + HTTPS (TCP 443) only; all other egress denied.
+  - Ingress: configurable; defaults to same-namespace pods on port 8080.
+  - Optional Prometheus scrape allowance from `monitoring` namespace.
+  - Feature-flagged via `networkPolicy.enabled` (default: `false`).
+- `values.yaml` hardened security contexts:
+  - `podSecurityContext`: `runAsNonRoot`, `runAsUser/Group: 1000`, `fsGroup: 1000`, `seccompProfile: RuntimeDefault`.
+  - `securityContext`: `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `runAsNonRoot`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`.
+  - Satisfies Kubernetes "restricted" Pod Security Standard.
+- `values.yaml` gains `networkPolicy` block with `enabled`, `ingress`, `allowMetricsScrape`, `extraEgressPorts`, `egress`.
+
+**Multi-cloud Terraform — Phase 10**
+- `deploy/terraform/modules/gcp/` — Cloud Run (serverless, auto-scaling), VPC + NAT + Serverless VPC Access connector, Cloud SQL PostgreSQL 15, GCS audit archive with lifecycle tiering (Standard → Nearline → Coldline → Delete), Artifact Registry, Secret Manager, IAM service account with minimal permissions.
+- `deploy/terraform/modules/azure/` — Azure Container Apps, VNet + subnets + NSG, Azure Database for PostgreSQL Flexible Server (HA in production), Azure Blob Storage with lifecycle management, Azure Container Registry (optional), Key Vault (RBAC mode), Managed Identity (zero-credential auth), Log Analytics workspace.
+- AWS module from Phase 7 unchanged.
+
+---
+
 ## [Unreleased] — Phase 9: Provider Scoping and Data Sovereignty
 
 ### Added
