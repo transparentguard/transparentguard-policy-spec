@@ -1,0 +1,196 @@
+tps_version: "1.0"
+name: "data-sovereignty-example"
+description: >
+  Demonstrates the full data sovereignty enforcement model.
+  Shows all three enforcement tiers: subject jurisdiction scoping,
+  processor jurisdiction blocking, and model training jurisdiction blocking.
+  Suitable as a starting point for EU-scoped GDPR deployments, US HIPAA
+  deployments, and mixed multi-jurisdiction environments.
+
+# This policy applies to all providers by default.
+# Per-rule provider scoping and data sovereignty rules narrow the scope further.
+provider: any
+
+rules:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rule 1 — EU data sovereignty (Tier 1 + full data_sovereignty enforce_type)
+  #
+  # Fires for EU/EEA/UK data subjects only.
+  # Blocks any provider in CN, RU, BY, IR.
+  # Blocks any provider whose models were trained in CN.
+  # Requires adequacy decision or SCCs for the transfer to be lawful.
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: eu-data-sovereignty
+    description: "Full GDPR Art. 46 data sovereignty enforcement for EU/EEA/UK data subjects."
+    stage: pre-request
+    action: enforce
+    enforce_type: data_sovereignty
+
+    # 1. DATA SUBJECT JURISDICTION — who is the data about?
+    data_subject_jurisdiction:
+      infer_from: geo_ip          # auto-detect from request IP via SDK geo middleware
+      accept: [EU, EEA, UK]       # this rule fires for EU/EEA/UK subjects only
+      fallback: EU                # assume EU if geo-IP is unavailable
+
+    # 2. PROCESSOR JURISDICTION — where can the AI process it?
+    allowed_processor_regions:
+      - eu-west-1                 # AWS eu-west-1 (Ireland)
+      - eu-west-2                 # AWS eu-west-2 (London)
+      - eu-west-3                 # AWS eu-west-3 (Paris)
+      - eu-central-1              # AWS eu-central-1 (Frankfurt)
+      - eu-central-2              # AWS eu-central-2 (Zurich)
+      - eu-north-1                # AWS eu-north-1 (Stockholm)
+      - eu-south-1                # AWS eu-south-1 (Milan)
+      - europe-west-*             # GCP European regions (prefix match)
+      - northeurope               # Azure North Europe (Dublin)
+      - westeurope                # Azure West Europe (Amsterdam)
+      - uksouth                   # Azure UK South
+      - francecentral             # Azure France Central
+      - germanywestcentral        # Azure Germany West Central
+      - swedencentral             # Azure Sweden Central
+
+    # Explicitly block high-risk processing jurisdictions
+    blocked_processor_jurisdictions:
+      - CN    # China: PIPL + Data Security Law mandate government access
+      - RU    # Russia: Federal Law 242-FZ, active EU/US sanctions
+      - BY    # Belarus: sanctioned, Russian data law alignment
+      - IR    # Iran: OFAC comprehensive sanctions
+
+    # 3. MODEL TRAINING JURISDICTION — where was the model trained?
+    blocked_training_jurisdictions:
+      - CN    # PRC data law applies to training data; government can compel access to weights
+
+    # 4. LEGAL TRANSFER MECHANISM — what makes the transfer lawful?
+    transfer_mechanism:
+      require_one_of:
+        - adequacy_decision             # EU Commission Art. 45 adequacy decision
+        - standard_contractual_clauses  # EC-approved SCCs (post-Schrems II)
+        - binding_corporate_rules       # Intra-group BCRs
+
+    # 5. LEGAL BASIS — why is processing permitted?
+    legal_basis: gdpr_article_6_1_b   # Contract performance
+
+    on_violation: block
+    log: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rule 2 — US HIPAA data sovereignty
+  #
+  # Fires for US data subjects.
+  # Restricts processing to US providers with HIPAA BAA attestation.
+  # Uses Tier 3 provider_match: requires hipaa-baa attestation.
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: us-hipaa-sovereignty
+    description: "HIPAA data sovereignty for US data subjects — providers must have signed BAA."
+    stage: pre-request
+    action: enforce
+    enforce_type: data_sovereignty
+
+    data_subject_jurisdiction:
+      infer_from: metadata        # set metadata.tg_subject_jurisdiction = "US" in SDK
+      accept: [US]
+      fallback: US
+
+    allowed_processor_regions:
+      - us-east-1
+      - us-east-2
+      - us-west-2
+      - eastus
+      - eastus2
+      - westus2
+      - westus3
+
+    blocked_training_jurisdictions:
+      - CN
+      - RU
+
+    legal_basis: hipaa_treatment_payment_operations
+
+    on_violation: block
+    log: true
+
+    # Tier 3: only providers with a HIPAA BAA can handle PHI
+    provider_match:
+      requires_attestation: [hipaa-baa, soc2-type2]
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rule 3 — Capability-scoped PII redaction (Tier 2 provider_match)
+  #
+  # Apply stricter PII redaction only when using vision-capable models
+  # (image inputs can contain PII in photos, documents, ID cards).
+  # Uses Tier 2 capability matching — no need to enumerate model names.
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: vision-model-pii-redact
+    description: "Extra PII redaction for vision-capable models that can read images."
+    stage: pre-request
+    action: redact
+
+    # Only evaluate this rule for models that support vision input
+    provider_match:
+      capabilities: [vision]
+
+    targets:
+      - type: pii
+        categories: [pii_all, phi]
+        confidence_threshold: 0.75
+
+    on_violation: redact
+    log: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rule 4 — Block high-risk providers entirely (Tier 1 glob scoping)
+  #
+  # Blocks deepseek/* regardless of sovereignty settings,
+  # because the provider is headquartered in CN with known PIPL exposure.
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: block-high-risk-providers
+    description: "Reject providers in high-risk jurisdictions unconditionally."
+    stage: pre-request
+    action: enforce
+    enforce_type: provider_allowlist
+
+    # Note: this uses the top-level provider_allowlist to BLOCK (not just skip).
+    # Distinct from rule-level providers: which SKIPS the rule when not matched.
+    allowed_providers:
+      - "!deepseek/*"       # blocked
+      - "any"               # all others allowed (negations evaluated first)
+
+    on_violation: block
+    log: true
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rule 5 — PHI redaction on all non-EU providers (Tier 1 negation)
+  #
+  # When the provider is NOT in the EU-approved list, redact PHI before sending.
+  # Uses providers[] negation syntax: "!" prefix excludes a glob.
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: phi-redact-non-eu-providers
+    description: "Redact PHI before sending to any provider not deployed in EU regions."
+    stage: pre-request
+    action: redact
+
+    # Skip this rule for EU-only providers (they are covered by eu-data-sovereignty above)
+    providers:
+      - "!mistral/*"        # mistral is EU-based — skip this rule for them
+      - any
+
+    targets:
+      - type: pii
+        categories: [phi, ssn, mrn, dob, health_condition]
+
+    on_violation: redact
+    log: true
+
+audit:
+  enabled: true
+  destination: "file://./logs/sovereignty-audit.ndjson"
+  format: ndjson
+  retention_days: 2555    # 7 years — HIPAA requirement
+  include_redacted_content: false
+  chain_integrity:
+    enabled: true
+    algorithm: sha256
+    sidecar_path: "./logs/.chain-head.json"
+    verify_on_startup: true
+    alert_on_break: true
