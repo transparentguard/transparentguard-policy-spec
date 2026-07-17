@@ -355,3 +355,110 @@ function isAnthropicClient(client: unknown): client is AnthropicClientLike {
 
 // Re-export formatTestResults at top level for CLI usage
 export { formatTestResults as formatPolicyTestResults };
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Custom Classifier Training Pipeline
+// ---------------------------------------------------------------------------
+export type {
+  LabeledExample,
+  DatasetStats,
+  DatasetVersion,
+  DatasetManifest,
+  TrainingSpec,
+  TrainingJob,
+  JobStatus,
+  ModelManifest,
+  ModelArtifact,
+  ModelCard,
+  ActiveLearningEntry,
+  DriftReport,
+  DriftWindowEntry,
+  SLSAProvenance,
+  ITrainerBackend,
+  DataSource,
+  BackendId,
+  ModelArchitecture,
+  AddExampleOptions,
+  ValidationReport,
+  ValidationFinding,
+  ValidationSeverity,
+  ValidationConfig,
+  SnapshotResult,
+  AutoLabelResult,
+  ModelLoadOptions,
+} from "./training/index.js";
+export {
+  // Dataset — store
+  tgDataDir,
+  datasetDir,
+  textId,
+  fileHash,
+  readExamples,
+  readVersionedExamples,
+  addExample,
+  importJsonl,
+  computeStats,
+  exportJsonl,
+  getManifest,
+  listDatasets,
+  // Dataset — validator
+  validateDataset,
+  formatValidationReport,
+  // Dataset — versioning
+  createSnapshot,
+  listVersions,
+  resolveDatasetVersion,
+  verifySnapshot,
+  formatVersionList,
+  // Dataset — auto-labeler
+  registerAutoLabeler,
+  autoLabel,
+  autoLabelFromFile,
+  // Dataset — drift
+  appendDriftEntry,
+  readDriftWindow,
+  checkDrift,
+  // Jobs — manager
+  listJobs,
+  getJob,
+  submitJob,
+  refreshJobStatus,
+  cancelTrainingJob,
+  formatJobList,
+  // Jobs — manifest (SLSA)
+  buildProvenance,
+  signProvenance,
+  verifyProvenance,
+  formatProvenance,
+  // Backends
+  registerBackend,
+  getBackend,
+  listBackends,
+  localBackend,
+  LocalTrainerBackend,
+  // Models — store
+  modelsBaseDir,
+  modelDir,
+  artifactDir,
+  weightsHash,
+  createArtifact,
+  loadArtifact,
+  resolveModelVersion,
+  updateManifest,
+  setHead,
+  listModelClassifiers,
+  listArtifactVersions,
+  formatModelList,
+  // Models — loader
+  appendActiveLearningEntry,
+  readActiveLearningQueue,
+  clearActiveLearningQueue,
+  loadAndInfer,
+  // Models — signing
+  signArtifact,
+  verifyArtifact,
+  // Models — card
+  generateModelCard,
+  formatModelCard,
+  toHuggingFaceReadme,
+} from "./training/index.js";
