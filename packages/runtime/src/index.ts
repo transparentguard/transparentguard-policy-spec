@@ -357,6 +357,28 @@ function isAnthropicClient(client: unknown): client is AnthropicClientLike {
 export { formatTestResults as formatPolicyTestResults };
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Phase 9 — Provider Scoping + Data Sovereignty
+// ---------------------------------------------------------------------------
+export type {
+  ProviderCapabilityMatch,
+  DataSubjectJurisdiction,
+  TransferMechanismConfig,
+} from "./types.js";
+export { providerMatchesRuleScope, matchesProviderGlob } from "./enforcements/provider-scoping.js";
+export { enforceDataSovereignty } from "./enforcements/data-sovereignty.js";
+export { PROVIDER_REGISTRY } from "./registry/provider-registry.js";
+export type { ProviderRegistryEntry } from "./registry/provider-registry.js";
+export {
+  ADEQUACY_DECISIONS,
+  getAdequacyStatus,
+  isAdequate,
+  isInEEA,
+  EU_EEA_JURISDICTIONS,
+} from "./registry/adequacy-decisions.js";
+export type { AdequacyEntry, TransferMechanism } from "./registry/adequacy-decisions.js";
+
+// ---------------------------------------------------------------------------
 // Phase 8 — Custom Classifier Training Pipeline
 // ---------------------------------------------------------------------------
 export type {
