@@ -39,7 +39,7 @@ import type {
 } from "./types.js";
 import { loadPolicy, parsePolicy } from "./loader.js";
 import { evaluate as coreEvaluate } from "./engine.js";
-import { checkLicense } from "./license/checker.js";
+import { checkLicense, assertFeature } from "./license/checker.js";
 import { AuditEmitter } from "./audit/emitter.js";
 import { WrappedOpenAIClient } from "./wrappers/openai.js";
 import { WrappedAnthropicClient } from "./wrappers/anthropic.js";
@@ -110,7 +110,7 @@ export type {
 } from "./types.js";
 
 export { PolicyLoadError, PolicySignatureError } from "./loader.js";
-export { TransparentGuardError, verifyOfflineKey } from "./license/checker.js";
+export { TransparentGuardError, verifyOfflineKey, assertFeature, checkLicense } from "./license/checker.js";
 export type { LicenseStatus, LicenseTier, LicenseFeature } from "./license/checker.js";
 export { toOcsfEvent } from "./audit/ocsf.js";
 export { approximateTokenCount } from "./enforcements/token-budget.js";
@@ -208,6 +208,104 @@ export {
 } from "./adapters/loader.js";
 
 // ---------------------------------------------------------------------------
+// Gate 1 — Policy-level license validator
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans a fully-loaded policy and throws immediately if any declared feature
+ * exceeds what the current license covers.
+ *
+ * This is Gate 1 — it fires at TransparentGuard.init() time so a misconfigured
+ * policy is rejected before any LLM call is ever made.
+ *
+ * Gate 2 is the assertFeature() call at each individual execution site inside
+ * engine.ts, stream-evaluator.ts, audit/emitter.ts, and adapters/loader.ts.
+ * Both gates must be bypassed independently — patching one leaves the other intact.
+ *
+ * The tier model is strictly cumulative (compounding upward):
+ *   Free < Startup < Growth < Enterprise < OEM
+ * Each tier includes all features from every tier below it.
+ */
+function validatePolicyLicense(policy: TPSPolicy, license: LicenseStatus): void {
+  // Compliance framework templates — Startup+
+  if ((policy.compliance_frameworks ?? []).length > 0) {
+    assertFeature(license, "compliance_frameworks",
+      "Compliance framework templates (HIPAA, GDPR, EU AI Act, SOC 2, FedRAMP)");
+  }
+
+  // PIE config — Growth+
+  if (policy.pie) {
+    assertFeature(license, "pie", "Policy Intelligence Engine (PIE)");
+  }
+
+  // Multi-environment block — Growth+
+  if ((policy.environments ?? []).length > 0) {
+    assertFeature(license, "multi_environment", "Multi-environment policy scoping");
+  }
+
+  // Streaming window / passthrough — Startup+
+  const streamMode = policy.audit?.streaming?.mode;
+  if (streamMode === "window" || streamMode === "passthrough") {
+    assertFeature(license, "streaming_window", "Streaming window/passthrough mode");
+  }
+
+  // Audit chain integrity — Startup+
+  if (policy.audit?.chain_integrity?.enabled) {
+    assertFeature(license, "audit_chain_integrity", "Audit chain integrity");
+  }
+
+  // Audit destinations — Startup+
+  const dest = policy.audit?.destination;
+  if (dest) {
+    if (dest.startsWith("s3://")) {
+      assertFeature(license, "audit_s3", "S3 audit destinations");
+    } else if (dest.startsWith("postgres://") || dest.startsWith("postgresql://")) {
+      assertFeature(license, "audit_postgres", "PostgreSQL audit destinations");
+    } else if (dest.startsWith("gcs://")) {
+      assertFeature(license, "audit_gcs", "GCS audit destinations");
+    } else if (dest.startsWith("azure://")) {
+      assertFeature(license, "audit_azure", "Azure audit destinations");
+    }
+  }
+
+  // Custom classifier registry — OEM
+  if ((policy.custom_classifiers ?? []).length > 0) {
+    assertFeature(license, "oem_embed", "Custom classifier registry");
+  }
+
+  // Rule-level feature checks
+  for (const rule of policy.rules ?? []) {
+    // ML classifiers — Startup+
+    if (rule.action === "classify") {
+      assertFeature(license, "ml_classifiers", "ML classifier rules");
+    }
+
+    if (rule.action === "enforce") {
+      // Confidentiality enforcement — Startup+
+      if (rule.enforce_type === "confidentiality") {
+        assertFeature(license, "confidentiality_check", "Confidentiality enforcement rules");
+      }
+      // Data sovereignty — Enterprise+
+      if (rule.enforce_type === "data_sovereignty") {
+        assertFeature(license, "data_sovereignty", "Data sovereignty enforcement");
+      }
+    }
+
+    // Provider risk-tier filtering — Startup+
+    if ((rule.provider_match as { risk_tier?: string[] } | undefined)?.risk_tier?.length) {
+      assertFeature(license, "provider_risk_tier", "Provider risk-tier filtering");
+    }
+
+    // Blocked training jurisdictions — Enterprise+
+    if ((rule.provider_match as { blocked_training_jurisdictions?: string[] } | undefined)
+      ?.blocked_training_jurisdictions?.length) {
+      assertFeature(license, "blocked_training_jurisdictions",
+        "Blocked training jurisdiction filtering");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main class
 // ---------------------------------------------------------------------------
 
@@ -245,6 +343,17 @@ export class TransparentGuard {
       options.apiBaseUrl,
       options.offlineMode,
     );
+
+    // Gate 2: offline mode requires Enterprise tier
+    if (options.offlineMode) {
+      assertFeature(license, "offline_mode", "Offline mode (zero-network operation)");
+    }
+
+    // Gate 1: scan the full policy upfront and reject any feature the license does not cover.
+    // This runs before any evaluation so misconfigured policies fail fast at startup,
+    // not mid-request. Gate 2 assertFeature calls at each execution site provide the
+    // second enforcement layer — both must be patched out to bypass.
+    validatePolicyLicense(policy, license);
 
     return new TransparentGuard(policy, license, options);
   }
