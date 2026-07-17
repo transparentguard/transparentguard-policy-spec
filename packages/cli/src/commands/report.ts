@@ -4,7 +4,7 @@
  */
 
 import { readFileSync, writeFileSync } from "fs";
-import { generateEvidencePackage } from "@transparentguard/runtime";
+import { generateEvidencePackage, checkLicense, assertFeature } from "@transparentguard/runtime";
 import type { ComplianceFramework } from "@transparentguard/runtime";
 import type { AuditEvent } from "@transparentguard/runtime";
 
@@ -36,6 +36,10 @@ function parseArgs(args: string[]): ParsedReportArgs {
 }
 
 export async function runReport(args: string[]): Promise<void> {
+  // Gate: report generation requires Growth tier
+  const license = await checkLicense(process.env["TG_API_KEY"]);
+  assertFeature(license, "report_generation", "Report generation (tg report)");
+
   const opts = parseArgs(args);
 
   if (opts.help || !opts.logs || !opts.framework) {
