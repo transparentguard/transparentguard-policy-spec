@@ -2,7 +2,7 @@
  * TransparentGuard Runtime — PIE Framework Drift Detector
  * Tracks known framework/regulation publication versions and warns when
  * a deployed template may be behind the latest published guidance.
- * Framework version updates are published at transparentguard.com/framework-versions.
+ * Framework version updates are published at transparentguard.dev/framework-versions.
  */
 
 export interface DriftWarning {
