@@ -1,6 +1,6 @@
 # transparentguard
 
-Python SDK for [TransparentGuard](https://transparentguard.com) — AI policy enforcement implementing the TransparentGuard Policy Spec (TPS) v1.0.
+Python SDK for [TransparentGuard](https://transparentguard.dev) — AI policy enforcement implementing the TransparentGuard Policy Spec (TPS) v1.0.
 
 Drop-in wrappers for OpenAI and Anthropic. Automatic PII redaction, compliance frameworks (HIPAA, GDPR, EU AI Act, SOC 2), audit logging, and violation blocking — all declared in a single YAML policy file.
 
@@ -148,7 +148,7 @@ mypy --strict your_module.py
 
 ## Docs
 
-Full documentation at [transparentguard.com/docs](https://transparentguard.com/docs).
+Full documentation at [transparentguard.dev/docs](https://transparentguard.dev/docs).
 
 ## License
 
