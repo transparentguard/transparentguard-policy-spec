@@ -1,13 +1,13 @@
-MIT License
+MIT License with Commons Clause
 
-Copyright (c) 2026 TransparentGuard
+Copyright (c) 2024 TransparentGuard, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+to use, copy, modify, merge, publish, distribute, sublicense, and/or create
+derivative works of the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
@@ -19,3 +19,191 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+────────────────────────────────────────────────────────────────────────────────
+COMMONS CLAUSE RESTRICTION ADDENDUM
+────────────────────────────────────────────────────────────────────────────────
+
+The rights granted to you under the MIT License above are subject to the
+following additional condition (the "Commons Clause"). This addendum does not
+alter or replace the MIT License; it supplements it by restricting certain
+commercial uses that are not granted by the MIT License alone.
+
+1. DEFINITIONS
+
+   "Software" means the TransparentGuard runtime, proxy, CLI, SDK, OEM
+   package, policy specification, and all associated source code, compiled
+   artifacts, documentation, configuration files, and example code distributed
+   in this repository or any derivative distribution thereof.
+
+   "Licensor" means TransparentGuard, Inc.
+
+   "You" means the individual or legal entity exercising rights under this
+   License.
+
+   "Sell" means practicing any or all of the rights granted to you under the
+   MIT License to provide to third parties, for a fee or other consideration
+   (including without limitation fees for hosting, consulting, support
+   services, or subscription access), a product or service whose value
+   derives, entirely or substantially, from the functionality of the Software.
+   For the avoidance of doubt, "Sell" includes but is not limited to:
+
+   (a) Operating a hosted or managed service — whether public, private, or
+       accessible to any party other than your own internal employees — where
+       third parties submit requests that are processed by the Software or any
+       substantial portion thereof, and where access to that service is
+       provided for a fee, subscription, usage-based charge, or in exchange
+       for any other form of consideration, including barter or equity;
+
+   (b) Embedding the Software, or any substantial portion of its logic, into a
+       commercial product, SaaS platform, API, or managed service that you
+       offer, sell, license, or otherwise distribute to third parties, where
+       the AI policy enforcement, LLM request filtering, prompt guardrail,
+       compliance audit, or data-governance capabilities of the Software
+       represent a material feature or selling point of that product;
+
+   (c) Offering the Software, or a derivative or rebranded version of it, as a
+       white-label or OEM product to any third party for resale, redistribution,
+       or sub-licensing, without a separate written OEM agreement executed with
+       TransparentGuard, Inc.;
+
+   (d) Providing consulting, implementation, integration, or support services
+       to third parties where the primary deliverable is a deployment of the
+       Software or a system substantially powered by the Software, and where
+       those services are rendered for a fee exceeding USD $5,000 in aggregate
+       per client engagement, without a separate written partner agreement
+       executed with TransparentGuard, Inc.;
+
+   (e) Building or operating a competing AI policy enforcement, LLM proxy,
+       prompt compliance, or AI governance product or service — whether
+       commercial or free — that is derived in substantial part from the
+       Software's architecture, rule engine, policy specification format, or
+       classifier logic, and that is offered to third parties outside your own
+       organization.
+
+   "Internal Use" means deployment and use of the Software solely to process
+   requests originating from your own organization's own applications and
+   systems, by your own employees or contractors, for your own internal
+   business operations, without exposing the Software's capabilities as a
+   service to any external third party.
+
+   "Non-Commercial Use" means use of the Software by individuals, academic
+   institutions, non-profit organizations (as recognized under applicable law),
+   and open-source projects where no revenue, fees, or other commercial
+   consideration is received or expected in connection with the use or
+   distribution of the Software.
+
+2. RESTRICTION
+
+   Without limiting other conditions in the MIT License above, the grant of
+   rights under that License does not include, and the License does not grant
+   to you, the right to Sell the Software as defined in Section 1.
+
+   Any use that constitutes "Sell" under Section 1 requires a separate
+   commercial license agreement with TransparentGuard, Inc. To obtain a
+   commercial license, contact: hello@transparentguard.dev
+
+3. WHAT IS PERMITTED WITHOUT A COMMERCIAL LICENSE
+
+   The following uses are expressly permitted under the MIT License and are
+   NOT restricted by this Commons Clause addendum:
+
+   (a) Internal Use — running the Software inside your own organization to
+       enforce AI policies on your own LLM-powered applications, at any scale,
+       for any internal business purpose, including commercial operations;
+
+   (b) Non-Commercial Use — personal projects, academic research, student
+       coursework, hackathons, non-profit deployments, and open-source projects
+       with no commercial component;
+
+   (c) Evaluation and Development — running the Software locally, in a
+       staging or test environment, or in a proof-of-concept, for the purpose
+       of evaluating whether to adopt the Software, even if that evaluation is
+       conducted by a for-profit company;
+
+   (d) Forking and Contributing — creating derivative works, submitting pull
+       requests, building public extensions, or publishing open-source tooling
+       that builds on the Software, provided such derivatives are themselves
+       released under this same License (MIT with Commons Clause) and are not
+       used in a manner that would otherwise constitute "Sell" under Section 1;
+
+   (e) Writing about or demonstrating the Software — publishing blog posts,
+       tutorials, conference talks, videos, or other educational content that
+       references, demonstrates, or benchmarks the Software.
+
+4. TRANSPARENCY AND ATTRIBUTION
+
+   Any permitted distribution or deployment of the Software, or any derivative
+   work thereof, must:
+
+   (a) Retain this license file, including both the MIT License text and this
+       Commons Clause addendum, in full and unmodified, in all copies and
+       substantial portions of the Software;
+
+   (b) Not remove, obscure, or alter any copyright notice, trademark, or
+       attribution notice included in the Software's source code, documentation,
+       or compiled output;
+
+   (c) Not use the name "TransparentGuard," the TransparentGuard logo, or any
+       confusingly similar name or mark in a way that implies endorsement,
+       sponsorship, or official affiliation with TransparentGuard, Inc., without
+       prior written consent.
+
+5. COMMERCIAL LICENSING
+
+   TransparentGuard, Inc. offers commercial licenses that unlock the full
+   capabilities of the Software — including managed hosting, OEM embedding,
+   white-labeling, and partner reseller rights — under the following tiers:
+
+   - Startup Plan:    api.transparentguard.dev/pricing
+   - Growth Plan:     api.transparentguard.dev/pricing
+   - Enterprise Plan: hello@transparentguard.dev (custom agreement)
+   - OEM / Partner:   hello@transparentguard.dev (custom agreement)
+
+   A commercial license supersedes this Commons Clause with respect to the
+   specific uses it authorizes, as described in the commercial agreement.
+
+6. ENFORCEMENT
+
+   Any use of the Software that violates this Commons Clause addendum is
+   outside the scope of the License granted herein and constitutes copyright
+   infringement under applicable law. TransparentGuard, Inc. reserves all
+   rights to enforce this License, seek injunctive relief, and pursue all
+   available legal remedies for unauthorized commercial use.
+
+   If you are uncertain whether your intended use requires a commercial
+   license, contact us before proceeding: hello@transparentguard.dev
+
+7. SEVERABILITY
+
+   If any provision of this Commons Clause addendum is held invalid or
+   unenforceable under applicable law, the remaining provisions shall continue
+   in full force and effect. The invalid or unenforceable provision shall be
+   modified to the minimum extent necessary to make it valid and enforceable,
+   preserving as closely as possible the original intent of the restriction.
+
+8. GOVERNING LAW
+
+   This Commons Clause addendum shall be governed by and construed in
+   accordance with the laws of the State of Delaware, United States of
+   America, without regard to its conflict of law principles. Any dispute
+   arising under or in connection with this addendum shall be subject to the
+   exclusive jurisdiction of the state and federal courts located in Delaware.
+
+────────────────────────────────────────────────────────────────────────────────
+SUMMARY (not legally binding — see full text above)
+────────────────────────────────────────────────────────────────────────────────
+
+  ✓  Use it internally at your company — no limit, no fee.
+  ✓  Use it for personal projects, research, or open source — no fee.
+  ✓  Evaluate it, fork it, contribute to it, write about it — no fee.
+
+  ✗  Offer it as a hosted or managed service to third parties — requires license.
+  ✗  Embed it in a commercial product you sell to customers — requires license.
+  ✗  White-label or OEM it — requires a written OEM agreement.
+  ✗  Build a competing AI policy/LLM governance product based on it — not permitted.
+  ✗  Charge for consulting/implementation services beyond $5k/client — requires
+     a partner agreement.
+
+  Questions? hello@transparentguard.dev
+────────────────────────────────────────────────────────────────────────────────
