@@ -66,6 +66,7 @@ const TIER_DEFAULT_FEATURES: Record<LicenseTier, LicenseFeature[]> = {
     "policy_registry",
     "fedramp",
     "trust_chain",
+    "custom_classifier_training",
   ],
   oem: [
     "ml_classifiers",
@@ -83,6 +84,7 @@ const TIER_DEFAULT_FEATURES: Record<LicenseTier, LicenseFeature[]> = {
     "fedramp",
     "trust_chain",
     "oem_embed",
+    "custom_classifier_training",
   ],
 };
 
